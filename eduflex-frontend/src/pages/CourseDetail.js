@@ -1,16 +1,58 @@
+// src/pages/CourseDetail.js
+import React, { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useApp } from "../contexts/AppContext";
 import { FaFilePdf, FaLink, FaCloudDownloadAlt, FaClipboardCheck, FaQuestionCircle, FaCheckCircle } from "react-icons/fa";
 
 export default function CourseDetail() {
   const { courseId } = useParams();
-  const { courses, assignments} = useApp();
-  const course = courses.find(c => String(c.id) === String(courseId));
-  const courseAssignments = assignments.filter(a => a.courseId === course?.id);
+  const {
+    getAllCourses,
+    getStudentAssignmentsForCourse,
+    user
+  } = useApp();
+  const [loading, setLoading] = useState(true);
+  const [course, setCourse] = useState(null);
+  const [assignments, setAssignments] = useState([]);
+  const [error, setError] = useState("");
 
-  if (!course || !course.enrolled) {
-    return <div style={{ padding: "2rem" }}>Course not found or not enrolled.</div>;
-  }
+  useEffect(() => {
+    const fetchDetails = async () => {
+      setLoading(true);
+      try {
+        // Fetch latest full course list (or just this course if you have a specific API)
+        const courses = await getAllCourses();
+        const found = (courses || []).find(
+          c =>
+            String(c.id) === String(courseId) ||
+            String(c._id) === String(courseId)
+        );
+        if (!found || (user?.role === "student" && !found.enrolled)) {
+          setError("Course not found or not enrolled.");
+          setCourse(null);
+          setAssignments([]);
+        } else {
+          setCourse(found);
+
+          // Get assignments just for this course
+          const asgnList = await getStudentAssignmentsForCourse(found._id || found.id);
+          setAssignments(asgnList?.filter(a => a.courseId === (found._id || found.id)) || []);
+        }
+      } catch (e) {
+        setError("Course not found or not enrolled.");
+      }
+      setLoading(false);
+    };
+    fetchDetails();
+    // Only re-run when courseId or user changes
+  }, [courseId, getAllCourses, getStudentAssignmentsForCourse, user]);
+
+  if (loading) return <div style={{padding:"2rem"}}>Loading...</div>;
+  if (error) return <div style={{ padding: "2rem" }}>{error}</div>;
+
+  const courseAssignments = assignments;
+  const materials = course.materials || [];
+  const quizzes = course.quizzes || [];
 
   return (
     <div style={{
@@ -29,21 +71,23 @@ export default function CourseDetail() {
       }}>
         {/* Course Header */}
         <div style={{ display: "flex", alignItems: "center", gap: 22, marginBottom: "2.2rem" }}>
-          <img
-            src={course.image}
-            alt={course.title}
-            style={{ width: 110, height: 110, objectFit: "cover", borderRadius: "0.8rem", boxShadow: "0 2px 15px #c7d2fe55" }}
-          />
+          {course.image && (
+            <img
+              src={course.image}
+              alt={course.title}
+              style={{ width: 110, height: 110, objectFit: "cover", borderRadius: "0.8rem", boxShadow: "0 2px 15px #c7d2fe55" }}
+            />
+          )}
           <div>
             <h2 style={{ fontWeight: "bold", fontSize: "2rem", marginBottom: "0.6rem", color: "#3730a3" }}>{course.title}</h2>
             <div style={{ fontSize: "1.1rem", color: "#5c5c81", marginBottom: ".3rem" }}>
               {course.description}
             </div>
             <div style={{ fontSize: ".97rem", color: "#388bb7" }}>
-              Instructor: <span style={{ fontWeight: 500 }}>{course.instructor}</span>
+              Instructor: <span style={{ fontWeight: 500 }}>{course.instructor || (course.teacher && course.teacher.name) || "-"}</span>
             </div>
             <div style={{ fontSize: ".92rem", color: "#aaa", marginTop: "0.18rem" }}>
-              Progress: <span style={{ color: "#22c55e", fontWeight: 500 }}>{course.progress}%</span>
+              Progress: <span style={{ color: "#22c55e", fontWeight: 500 }}>{course.progress ?? 0}%</span>
             </div>
           </div>
         </div>
@@ -58,11 +102,11 @@ export default function CourseDetail() {
         boxShadow: "0 2px 18px #cbd5e144"
       }}>
         <h3 style={{ color: "#2563eb", fontWeight: "bold", marginBottom: "1rem" }}>📁 Study Materials</h3>
-        {course.materials.length === 0 ? (
+        {materials.length === 0 ? (
           <div style={{ color: "#a6a6a6" }}>No materials uploaded yet.</div>
         ) : (
           <div style={{ display: "flex", flexWrap: "wrap", gap: "1.4rem" }}>
-            {course.materials.map(mat => (
+            {materials.map(mat => (
               <div key={mat.id} style={{
                 minWidth: 220,
                 background: "#eef1ff",
@@ -148,11 +192,11 @@ export default function CourseDetail() {
         boxShadow: "0 2px 18px #fde68a22"
       }}>
         <h3 style={{ color: "#ca8a04", fontWeight: "bold", marginBottom: "1rem" }}>📋 Quizzes</h3>
-        {(course.quizzes || []).length === 0 ? (
+        {quizzes.length === 0 ? (
           <div style={{ color: "#a6a6a6" }}>No quizzes yet.</div>
         ) : (
           <ul style={{ padding: 0, listStyle: "none" }}>
-            {course.quizzes.map((q, idx) => (
+            {quizzes.map((q, idx) => (
               <li key={q.id} style={{
                 display: "flex",
                 alignItems: "center",
@@ -166,7 +210,7 @@ export default function CourseDetail() {
                   <FaQuestionCircle style={{ color: "#ca8a04", marginRight: 6, fontSize: "1.05em" }} />
                   {q.title}
                 </span>
-                <Link to={`/courses/${course.id}/quizzes/${q.id}`}
+                <Link to={`/courses/${course._id || course.id}/quizzes/${q.id}`}
                   style={{
                     color: "#fff", background: "#f59e42",
                     borderRadius: "7px",

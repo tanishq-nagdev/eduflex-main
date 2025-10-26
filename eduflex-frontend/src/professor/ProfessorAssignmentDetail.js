@@ -1,28 +1,58 @@
 import { useApp } from "../contexts/AppContext";
 import { useParams } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "react-toastify";
+
+// Assumed: you have getProfessorAssignments, getProfessorCourseById, getEnrolledStudents, gradeSubmission
 
 export default function ProfessorAssignmentDetail() {
   const { assignmentId } = useParams();
-  const { assignments, courses, gradeSubmission, MOCK_USERS } = useApp();
+  const {
+    getProfessorAssignments,
+    getProfessorCourseById,
+    getEnrolledStudents, // <-- implement in context or fetch students with course
+    gradeSubmission,
+  } = useApp();
 
-  const assignment = assignments.find(a => String(a.id) === String(assignmentId));
-  const course =
-    assignment && courses.find(c => c.id === assignment.courseId);
-  const students = course
-    ? course.enrolledStudents.map(sid =>
-        MOCK_USERS.find(u => u.id === sid)
-      )
-    : [];
+  const [assignment, setAssignment] = useState(null);
+  const [course, setCourse] = useState(null);
+  const [students, setStudents] = useState([]);
+  const [gradingState, setGradingState] = useState({});
+  const [loading, setLoading] = useState(true);
 
-  // Maintain per-student grading form state
-  const [gradingState, setGradingState] = useState(
-    () =>
+  // Fetch assignment, course, and students
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      // Get all assignments for all professor courses, then find the one we want
+      let foundAssignment = null, foundCourse = null;
+      const courses = await getProfessorCourseById ? await getProfessorCourseById() : [];
+      for (const c of (Array.isArray(courses) ? courses : [courses])) {
+        const courseAssignments = await getProfessorAssignments(c.id || c._id);
+        const match = (courseAssignments || []).find(a => String(a.id || a._id) === String(assignmentId));
+        if (match) {
+          foundAssignment = match;
+          foundCourse = c;
+          break;
+        }
+      }
+      setAssignment(foundAssignment);
+      setCourse(foundCourse);
+      if (foundCourse && foundCourse.id)
+        setStudents(await getEnrolledStudents(foundCourse.id));
+      setLoading(false);
+    };
+    fetchData();
+    // eslint-disable-next-line
+  }, [assignmentId]);
+
+  // Setup grading state whenever students or assignment change
+  useEffect(() => {
+    if (!students.length || !assignment) return;
+    setGradingState(
       Object.fromEntries(
-        (students || []).map(stu => {
-          const sub =
-            assignment?.submissions.find(sub => sub.studentId === stu.id) || {};
+        students.map(stu => {
+          const sub = assignment.submissions?.find(sub => sub.studentId === stu.id) || {};
           return [
             stu.id,
             {
@@ -31,8 +61,9 @@ export default function ProfessorAssignmentDetail() {
             }
           ];
         })
-      ) || {}
-  );
+      )
+    );
+  }, [students, assignment]);
 
   const handleInput = (sid, key, value) => {
     setGradingState(st => ({
@@ -44,12 +75,15 @@ export default function ProfessorAssignmentDetail() {
     }));
   };
 
+  if (loading) return <div style={{ padding: 32 }}>Loading...</div>;
   if (!assignment) return <div style={{ padding: 32 }}>Assignment not found.</div>;
 
-  let numSubmitted = 0, numNot = 0;
+  let numSubmitted = 0,
+    numNot = 0;
   students.forEach(stu => {
     const sub = assignment.submissions?.find(sub => sub.studentId === stu.id);
-    if (sub?.status === "submitted") numSubmitted++; else numNot++;
+    if (sub?.status === "submitted") numSubmitted++;
+    else numNot++;
   });
 
   return (
@@ -77,8 +111,9 @@ export default function ProfessorAssignmentDetail() {
         <tbody>
           {students.map(stu => {
             const submission =
-              assignment.submissions.find(sub => sub.studentId === stu.id) ||
-              { status: "not_submitted" };
+              assignment.submissions?.find(sub => sub.studentId === stu.id) || {
+                status: "not_submitted"
+              };
             return (
               <tr key={stu.id}>
                 <td style={tdS}>
@@ -159,14 +194,18 @@ export default function ProfessorAssignmentDetail() {
                 <td style={tdS}>
                   {submission.status === "submitted" ? (
                     <button
-                      onClick={() => {
-                        gradeSubmission(
-                          assignment.id,
+                      onClick={async () => {
+                        await gradeSubmission(
+                          assignment.id || assignment._id,
                           stu.id,
-                          Number(gradingState[stu.id]?.grade),
-                          gradingState[stu.id]?.feedback
+                          {
+                            grade: Number(gradingState[stu.id]?.grade),
+                            feedback: gradingState[stu.id]?.feedback
+                          }
                         );
                         toast.success("Graded!");
+                        // Refresh assignment after grading
+                        // ...repeat the fetch logic to update assignment and state
                       }}
                       disabled={submission.graded}
                       style={{
@@ -195,6 +234,7 @@ export default function ProfessorAssignmentDetail() {
     </div>
   );
 }
+
 
 function Status({ status, graded }) {
   if (status === "submitted" && graded)

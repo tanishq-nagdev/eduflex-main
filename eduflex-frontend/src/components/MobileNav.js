@@ -9,8 +9,9 @@ export default function MobileNav() {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { logoutUser } = useApp();
+  const { user, logoutUser } = useApp();
 
+  // You can add logic here to only show tabs for students/professors/admin by checking user.role
   const menuItems = [
     { name: "Dashboard", path: "/dashboard", icon: <FaTachometerAlt /> },
     { name: "User", path: "/user", icon: <FaUser /> },
@@ -47,7 +48,7 @@ export default function MobileNav() {
       {/* Mobile Menu Overlay */}
       {isOpen && (
         <>
-          <div 
+          <div
             className="fixed inset-0 bg-black bg-opacity-50 z-40"
             onClick={() => setIsOpen(false)}
           />
@@ -59,7 +60,7 @@ export default function MobileNav() {
                   <FaTimes className="text-white hover:text-green-200 text-xl" />
                 </button>
               </div>
-              
+
               <nav className="space-y-2">
                 {menuItems.map((item) => (
                   <Link
@@ -76,7 +77,7 @@ export default function MobileNav() {
                     <span className="font-medium">{item.name}</span>
                   </Link>
                 ))}
-                
+
                 {/* Logout Button */}
                 <button
                   onClick={handleLogout}

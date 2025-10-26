@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+// src/pages/Login.js
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useApp, MOCK_USERS } from "../contexts/AppContext";
+import { useApp } from "../contexts/AppContext";
 import { toast } from 'react-toastify';
 import logo from "../assets/logo (2).png";
 
@@ -10,50 +11,41 @@ export default function Login() {
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  
+
   const navigate = useNavigate();
-  const { loginUser } = useApp();
+  const { loginUser, user } = useApp();
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (user) {
+      if (user.role === 'professor') navigate('/professor/dashboard', { replace: true });
+      else if (user.role === 'student') navigate('/dashboard', { replace: true });
+      else if (user.role === 'admin') navigate('/admin/dashboard', { replace: true });
+    }
+  }, [user, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
 
-    // Simulating API call delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // Call context loginUser (connects to backend)
+    const loggedInUser = await loginUser(email, password);
 
-    // Find a user (student OR professor)
-    const user = MOCK_USERS.find(
-      u => u.email === email && u.password === password
-    );
-
-    if (user) {
-      loginUser(user);
-      toast.success(`Welcome back, ${user.name}!`);
-
-      // Store remember me preference
+    if (loggedInUser) {
       if (rememberMe) {
-        localStorage.setItem('rememberMe', email);
+        localStorage.setItem('rememberMeEmail', email);
       } else {
-        localStorage.removeItem('rememberMe');
+        localStorage.removeItem('rememberMeEmail');
       }
-
-      // Redirect by role
-      setTimeout(() => {
-        if (user.role === "professor") {
-          navigate('/professor/dashboard');
-        } else {
-          navigate('/courses'); // or '/courses' as you prefer for student
-        }
-      }, 500);
+      // Redirect is triggered by useEffect after user state updates
     } else {
-      toast.error('Invalid email or password. Please try again.');
-      setLoading(false);
+      setLoading(false); // Only set loading on failure
     }
   };
 
-  // Load remembered email on mount
-  React.useEffect(() => {
-    const rememberedEmail = localStorage.getItem('rememberMe');
+  // Load remembered email
+  useEffect(() => {
+    const rememberedEmail = localStorage.getItem('rememberMeEmail');
     if (rememberedEmail) {
       setEmail(rememberedEmail);
       setRememberMe(true);
@@ -61,164 +53,95 @@ export default function Login() {
   }, []);
 
   return (
-    <div style={{ display: "flex", height: "100vh", background: "#f0f0f0" }}>
+    <div className="flex h-screen bg-gray-100">
       {/* Left side: Logo */}
-      <div
-        style={{
-          flex: 1,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "linear-gradient(135deg, #10b981, #059669)",
-        }}
-        className="hidden md:flex"
-      >
+      <div className="hidden md:flex flex-1 items-center justify-center bg-gradient-to-br from-green-500 to-green-700">
         <img
           src={logo}
           alt="EduFlex Logo"
-          className="w-90 md:w-90 lg:w-116 h-auto transform transition duration-500 hover:scale-110 hover:rotate-3"
+          className="w-3/4 max-w-md transform transition duration-500 hover:scale-110 hover:rotate-3"
         />
       </div>
 
       {/* Right side: Login form */}
-      <div
-        style={{
-          flex: 1,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "2rem",
-        }}
-      >
-        <form 
+      <div className="flex-1 flex items-center justify-center p-6 md:p-12">
+        <form
           onSubmit={handleSubmit}
-          style={{ 
-            width: "100%",
-            maxWidth: "400px",
-            background: "white",
-            padding: "2rem",
-            borderRadius: "1rem",
-            boxShadow: "0 10px 30px rgba(0,0,0,0.1)"
-          }}
+          className="w-full max-w-md bg-white p-8 rounded-xl shadow-lg"
         >
-          <h2 style={{
-            fontSize: "1.8rem",
-            fontWeight: "bold",
-            marginBottom: "0.5rem",
-            textAlign: "center",
-            color: "#059669"
-          }}>
+          <h2 className="text-3xl font-bold mb-2 text-center text-green-700">
             Login
           </h2>
-          <p style={{
-            textAlign: "center",
-            color: "#6b7280",
-            marginBottom: "1.5rem",
-            fontSize: "0.9rem"
-          }}>
+          <p className="text-center text-gray-500 mb-6 text-sm">
             Welcome! Please login to continue.
           </p>
           {/* Email input */}
-          <div style={{ position: "relative", marginBottom: "1.5rem" }}>
+          <div className="relative mb-6">
             <input
               type="email"
+              id="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder=" "
               required
               disabled={loading}
-              className="peer w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-green-500"
-              style={{
-                background: loading ? "#f3f4f6" : "white"
-              }}
+              className="peer block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition duration-200 bg-white disabled:bg-gray-100"
             />
             <label
-              style={{
-                position: "absolute",
-                left: "0.5rem",
-                top: "0.5rem",
-                color: "#888",
-                transition: "all 0.3s",
-                pointerEvents: "none",
-              }}
-              className="peer-focus:-translate-y-6 peer-focus:text-xs peer-focus:text-green-600 peer-[:not(:placeholder-shown)]:-translate-y-6 peer-[:not(:placeholder-shown)]:text-xs"
+              htmlFor="email"
+              className="absolute left-3 -top-2.5 text-xs text-gray-500 bg-white px-1 transition-all duration-200
+                         peer-placeholder-shown:top-2 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400
+                         peer-focus:-top-2.5 peer-focus:text-xs peer-focus:text-green-600"
             >
               Email Address
             </label>
           </div>
           {/* Password input */}
-          <div style={{ position: "relative", marginBottom: "1.5rem" }}>
+          <div className="relative mb-4">
             <input
               type={showPassword ? "text" : "password"}
+              id="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder=" "
               required
               disabled={loading}
-              className="peer w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-green-500"
-              style={{
-                background: loading ? "#f3f4f6" : "white"
-              }}
+              className="peer block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition duration-200 bg-white disabled:bg-gray-100"
             />
             <label
-              style={{
-                position: "absolute",
-                left: "0.5rem",
-                top: "0.5rem",
-                color: "#888",
-                transition: "all 0.3s",
-                pointerEvents: "none",
-              }}
-              className="peer-focus:-translate-y-6 peer-focus:text-xs peer-focus:text-green-600 peer-[:not(:placeholder-shown)]:-translate-y-6 peer-[:not(:placeholder-shown)]:text-xs"
+              htmlFor="password"
+              className="absolute left-3 -top-2.5 text-xs text-gray-500 bg-white px-1 transition-all duration-200
+                         peer-placeholder-shown:top-2 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400
+                         peer-focus:-top-2.5 peer-focus:text-xs peer-focus:text-green-600"
             >
               Password
             </label>
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              style={{
-                position: "absolute",
-                right: "0.75rem",
-                top: "50%",
-                transform: "translateY(-50%)",
-                color: "#6b7280",
-                fontSize: "0.875rem",
-                background: "none",
-                border: "none",
-                cursor: "pointer"
-              }}
+              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-sm text-gray-500 hover:text-green-600 focus:outline-none"
+              aria-label={showPassword ? "Hide password" : "Show password"}
             >
               {showPassword ? "Hide" : "Show"}
             </button>
           </div>
 
           {/* Remember me & Forgot password */}
-          <div style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "1.5rem"
-          }}>
-            <label style={{ display: "flex", alignItems: "center", cursor: "pointer" }}>
-              <input 
-                type="checkbox" 
+          <div className="flex justify-between items-center mb-6 text-sm">
+            <label className="flex items-center cursor-pointer text-gray-600">
+              <input
+                type="checkbox"
                 checked={rememberMe}
                 onChange={(e) => setRememberMe(e.target.checked)}
                 disabled={loading}
-                style={{ marginRight: "0.5rem" }} 
+                className="mr-2 rounded border-gray-300 text-green-600 focus:ring-green-500"
               />
               Remember me
             </label>
             <button
               type="button"
               onClick={() => toast.info('Password reset feature coming soon!')}
-              style={{ 
-                color: "#059669",
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                textDecoration: "underline"
-              }}
+              className="text-green-600 hover:text-green-800 hover:underline focus:outline-none"
             >
               Forgot password?
             </button>
@@ -228,68 +151,24 @@ export default function Login() {
           <button
             type="submit"
             disabled={loading}
-            style={{
-              width: "100%",
-              padding: "0.75rem",
-              background: loading ? "#9ca3af" : "linear-gradient(135deg, #10b981, #059669)",
-              color: "white",
-              border: "none",
-              borderRadius: "0.5rem",
-              fontSize: "1rem",
-              fontWeight: "600",
-              cursor: loading ? "not-allowed" : "pointer",
-              transition: "all 0.3s",
-            }}
-            onMouseEnter={(e) => !loading && (e.target.style.transform = "scale(1.02)")}
-            onMouseLeave={(e) => !loading && (e.target.style.transform = "scale(1)")}
+            className="w-full py-2.5 px-4 bg-gradient-to-r from-green-500 to-green-700 text-white rounded-md font-semibold text-base
+                       hover:from-green-600 hover:to-green-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500
+                       transition duration-300 ease-in-out transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? (
-              <span style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <span style={{ 
-                  display: "inline-block",
-                  width: "16px",
-                  height: "16px",
-                  border: "2px solid white",
-                  borderTopColor: "transparent",
-                  borderRadius: "50%",
-                  animation: "spin 1s linear infinite",
-                  marginRight: "0.5rem"
-                }}></span>
+              <span className="flex items-center justify-center">
+                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
                 Logging in...
               </span>
             ) : (
               "Login"
             )}
           </button>
-
-          {/* Demo credentials info */}
-          <div style={{
-            marginTop: "1.5rem",
-            padding: "1rem",
-            background: "#f0fdf4",
-            border: "1px solid #bbf7d0",
-            borderRadius: "0.5rem",
-            fontSize: "0.875rem",
-            color: "#059669"
-          }}>
-            <strong>📌 Demo Student:</strong>
-            <div style={{ marginTop: "0.5rem", fontFamily: "monospace" }}>
-              <div>📧 student@eduflex.com<br/>🔒 student123</div>
-            </div>
-            <strong>📌 Demo Professor:</strong>
-            <div style={{ marginTop: "0.5rem", fontFamily: "monospace" }}>
-              <div>📧 prof.sharma@eduflex.com<br/>🔒 prof123</div>
-            </div>
-          </div>
         </form>
       </div>
-
-      {/* Add spinning animation */}
-      <style>{`
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
     </div>
   );
 }

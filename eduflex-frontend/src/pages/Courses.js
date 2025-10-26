@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+// src/pages/Courses.js
+import React, { useState, useEffect } from "react";
 import { useApp } from "../contexts/AppContext";
 import SearchIcon from "../assets/search.svg";
 import { Link, useNavigate } from "react-router-dom";
@@ -6,339 +7,162 @@ import { toast } from "react-toastify";
 
 function Courses() {
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useState("all"); // 'all', 'enrolled', 'available'
+  const [courses, setCourses] = useState([]);
+  const [loading, setLoading] = useState(true);
+
   const {
-    courses,
-    updateCourseProgress,
+    user,
+    getAllCourses,
+    getMyStudentCourses,
     enrollInCourse,
     unenrollFromCourse,
-    loading
   } = useApp();
 
   const navigate = useNavigate();
 
-  // Filter courses based on enrollment and search
-  const filteredCourses = courses.filter((course) => {
-    const matchesSearch = course.title.toLowerCase().includes(search.toLowerCase()) ||
-      course.description.toLowerCase().includes(search.toLowerCase()) ||
-      (course.instructor && course.instructor.toLowerCase().includes(search.toLowerCase()));
-    const matchesFilter = filter === "all" ||
-      (filter === "enrolled" && course.enrolled) ||
-      (filter === "available" && !course.enrolled);
+  // Fetch courses per filter
+  useEffect(() => {
+    const fetchCourses = async () => {
+      setLoading(true);
+      try {
+        let fetchedCourses = [];
+        if (filter === 'enrolled') {
+          fetchedCourses = await getMyStudentCourses();
+        } else {
+          fetchedCourses = await getAllCourses();
+        }
+        setCourses(fetchedCourses || []);
+      } catch (error) {
+        toast.error("Failed to fetch courses.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    if (user) fetchCourses();
+  }, [filter, user, getAllCourses, getMyStudentCourses]);
 
-    return matchesSearch && matchesFilter;
+  // Search and further filtering
+  const filteredCourses = courses.filter(course => {
+    // 'available' filter: not enrolled
+    if (filter === "available" && course.enrolled) return false;
+    // Search logic
+    const term = search.toLowerCase();
+    const teacherName =
+      (course.teacher?.name || course.instructor || "").toLowerCase();
+    return (
+      course.title?.toLowerCase().includes(term) ||
+      course.description?.toLowerCase().includes(term) ||
+      teacherName.includes(term)
+    );
   });
 
-  // Handle enrollment toggle via context functions
-  const handleEnrollment = (courseId) => {
-    const course = courses.find(c => c.id === courseId);
-    if (course.enrolled) {
-      unenrollFromCourse(courseId);
-      toast.success(`Unenrolled from ${course.title}`);
-    } else {
-      enrollInCourse(courseId);
-      toast.success(`Successfully enrolled in ${course.title}!`);
+  const handleEnrollment = async (courseId, isEnrolled, title) => {
+    try {
+      if (isEnrolled) {
+        await unenrollFromCourse(courseId);
+        toast.success(`Unenrolled from ${title}.`);
+      } else {
+        await enrollInCourse(courseId);
+        toast.success(`Enrolled in ${title}!`);
+      }
+      // Refetch current filter's courses after status change
+      setFilter(f => f); // Triggers useEffect
+    } catch {
+      toast.error(`Failed to ${isEnrolled ? 'unenroll' : 'enroll'}.`);
     }
-  };
-
-  // Handle progress update
-  const handleProgressUpdate = (courseId, currentProgress) => {
-    const newProgress = Math.min(currentProgress + 10, 100);
-    updateCourseProgress(courseId, newProgress);
   };
 
   if (loading) {
     return (
-      <div style={{ padding: "2rem", marginLeft: "64px", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ textAlign: "center" }}>
-          <div style={{
-            width: "40px",
-            height: "40px",
-            border: "4px solid #f3f4f6",
-            borderTop: "4px solid #22c55e",
-            borderRadius: "50%",
-            animation: "spin 1s linear infinite",
-            margin: "0 auto 1rem"
-          }}></div>
-          <p>Loading courses...</p>
-          <style>{`
-            @keyframes spin {
-              0% { transform: rotate(0deg); }
-              100% { transform: rotate(360deg); }
-            }
-          `}</style>
-        </div>
+      <div className="flex items-center justify-center h-96 text-lg">
+        Loading courses...
       </div>
     );
   }
 
   return (
-    <div style={{ padding: "2rem", marginLeft: "64px", minHeight: "100vh" }}>
-      {/* Header */}
-      <h1 style={{ fontSize: "2rem", fontWeight: "bold", marginBottom: "0.5rem" }}>Courses</h1>
-      <p style={{ fontSize: "1rem", color: "#555", marginBottom: "1.5rem" }}>
-        Browse all available courses. Use the search bar to quickly find what you need.
-      </p>
-
-      {/* Stats Cards */}
-      <div style={{ display: "flex", gap: "1rem", marginBottom: "1.5rem" }}>
-        <div style={{
-          background: "linear-gradient(135deg, #22c55e, #16a34a)",
-          color: "white", padding: "1rem", borderRadius: "0.5rem",
-          minWidth: "120px", textAlign: "center"
-        }}>
-          <div style={{ fontSize: "1.5rem", fontWeight: "bold" }}>
-            {courses.filter(c => c.enrolled).length}
-          </div>
-          <div style={{ fontSize: "0.8rem", opacity: 0.9 }}>Enrolled</div>
-        </div>
-
-        <div style={{
-          background: "linear-gradient(135deg, #3b82f6, #1d4ed8)",
-          color: "white", padding: "1rem", borderRadius: "0.5rem",
-          minWidth: "120px", textAlign: "center"
-        }}>
-          <div style={{ fontSize: "1.5rem", fontWeight: "bold" }}>
-            {courses.filter(c => !c.enrolled).length}
-          </div>
-          <div style={{ fontSize: "0.8rem", opacity: 0.9 }}>Available</div>
-        </div>
-      </div>
-
-      {/* Controls */}
-      <div style={{ display: "flex", gap: "1rem", alignItems: "center", marginBottom: "2rem", flexWrap: "wrap" }}>
-        {/* Search Bar */}
-        <div style={{ position: "relative", width: "350px" }}>
+    <div className="p-8 pl-24 min-h-screen">
+      <h1 className="text-3xl font-bold mb-2">Courses</h1>
+      <p className="text-gray-600 mb-6">Browse available courses or view your enrolled ones.</p>
+      {/* === Search & Filter Controls === */}
+      <div className="flex flex-wrap gap-4 items-center mb-8">
+        {/* Search */}
+        <div className="relative flex-grow max-w-md">
           <input
             type="text"
             placeholder="Search courses..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            style={{
-              padding: "0.6rem 1rem 0.6rem 2.5rem",
-              width: "100%",
-              borderRadius: "0.5rem",
-              border: "1px solid #ccc",
-              fontSize: "1rem",
-            }}
+            className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
           />
           <img
             src={SearchIcon}
             alt="Search"
-            style={{
-              position: "absolute",
-              left: "0.8rem",
-              top: "50%",
-              transform: "translateY(-50%)",
-              width: "1rem",
-              height: "1rem",
-              pointerEvents: "none",
-            }}
+            className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none"
           />
         </div>
-
         {/* Filter Buttons */}
-        <div style={{ display: "flex", gap: "0.5rem" }}>
-          {[
-            { key: "all", label: "All", color: "#6b7280" },
-            { key: "enrolled", label: "My Courses", color: "#22c55e" },
-            { key: "available", label: "Available", color: "#3b82f6" }
-          ].map(filterOption => (
-            <button
-              key={filterOption.key}
-              onClick={() => setFilter(filterOption.key)}
-              style={{
-                padding: "0.5rem 1rem",
-                borderRadius: "0.5rem",
-                border: "none",
-                fontSize: "0.9rem",
-                fontWeight: "500",
-                cursor: "pointer",
-                background: filter === filterOption.key ? filterOption.color : "#f3f4f6",
-                color: filter === filterOption.key ? "white" : "#374151",
-                transition: "all 0.2s ease"
-              }}
-            >
-              {filterOption.label}
-            </button>
-          ))}
+        <div className="flex gap-2">
+          <button
+            className={`px-4 py-2 rounded ${filter === "all" ? "bg-green-600 text-white" : "bg-gray-200 text-gray-800"}`}
+            onClick={() => setFilter("all")}
+          >All</button>
+          <button
+            className={`px-4 py-2 rounded ${filter === "enrolled" ? "bg-green-600 text-white" : "bg-gray-200 text-gray-800"}`}
+            onClick={() => setFilter("enrolled")}
+          >Enrolled</button>
+          <button
+            className={`px-4 py-2 rounded ${filter === "available" ? "bg-green-600 text-white" : "bg-gray-200 text-gray-800"}`}
+            onClick={() => setFilter("available")}
+          >Available</button>
         </div>
       </div>
 
-      {/* Courses Grid */}
-      <div style={{ display: "flex", gap: "1.5rem", flexWrap: "wrap" }}>
+      {/* === Course Grid === */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {filteredCourses.length > 0 ? (
-          filteredCourses.map((course) => (
+          filteredCourses.map(course => (
             <div
-              key={course.id || course._id}
-              style={{
-                width: "320px",
-                background: "#fff",
-                borderRadius: "1rem",
-                overflow: "hidden",
-                boxShadow: "0 8px 16px rgba(0,0,0,0.15)",
-                transition: "transform 0.3s ease",
-                cursor: "pointer",
-                border: course.enrolled ? "3px solid #22c55e" : "3px solid transparent",
-                position: "relative",
-                display: "flex",
-                flexDirection: "column"
-              }}
-              onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.03)"; }}
-              onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; }}
+              key={course._id}
+              className={`bg-white rounded-xl shadow-md overflow-hidden transition-all duration-300 hover:shadow-xl hover:scale-105 border-2 ${course.enrolled ? 'border-green-500' : 'border-transparent'}`}
             >
-              {/* Enrollment Badge */}
-              {course.enrolled && (
-                <div style={{
-                  position: "absolute",
-                  top: "10px",
-                  right: "10px",
-                  background: "#22c55e",
-                  color: "white",
-                  padding: "0.25rem 0.5rem",
-                  borderRadius: "1rem",
-                  fontSize: "0.75rem",
-                  fontWeight: "bold",
-                  zIndex: 1
-                }}>
-                  ✓ Enrolled
-                </div>
+              {course.image && (
+                <img src={course.image} alt={course.title} className="h-40 w-full object-cover" />
               )}
-
-              <img
-                src={course.image}
-                alt={course.title}
-                style={{ width: "100%", height: "160px", objectFit: "cover" }}
-              />
-
-              <div style={{ padding: "1rem", flex: "1" }}>
-                <h2 style={{ fontSize: "1.25rem", fontWeight: "600", marginBottom: "0.5rem" }}>
-                  {course.title}
-                </h2>
-                <p style={{ fontSize: "0.9rem", color: "#555", marginBottom: "0.5rem" }}>
-                  {course.description}
+              <div className="p-4 flex flex-col h-full">
+                <h2 className="text-lg font-bold text-green-700 mb-1">{course.title}</h2>
+                <p className="text-sm italic text-gray-500 mb-4">
+                  Instructor: {course.teacher?.name || course.instructor || "N/A"}
                 </p>
-                <p style={{ fontSize: "0.85rem", fontStyle: "italic", color: "#777", marginBottom: "0.8rem" }}>
-                  Instructor: {course.instructor}
-                </p>
-
-                {/* Progress Bar */}
-                {course.enrolled && (
-                  <div style={{ marginBottom: "0.8rem" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
-                      <span style={{ fontSize: "0.8rem", color: "#666" }}>Progress</span>
-                      <span style={{ fontSize: "0.8rem", fontWeight: "bold", color: "#22c55e" }}>{course.progress}%</span>
-                    </div>
-                    <div style={{ width: "100%", height: "6px", backgroundColor: "#e5e7eb", borderRadius: "3px", overflow: "hidden" }}>
-                      <div style={{ width: `${course.progress}%`, height: "100%", backgroundColor: "#22c55e", transition: "width 0.3s ease" }} />
-                    </div>
-                  </div>
-                )}
-
-                {/* Action Buttons */}
-                <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end", flexWrap: "wrap" }}>
+                <div className="text-gray-800 mb-1" style={{ minHeight: "48px" }}>{course.description}</div>
+                {course.credits &&
+                  <div className="text-gray-500 text-xs mb-2">Credits: {course.credits}</div>
+                }
+                <div className="flex gap-2 mt-auto pt-4">
                   <button
-                    onClick={() => handleEnrollment(course.id, course.enrolled)}
-                    style={{
-                      flex: "1",
-                      padding: "0.5rem 1rem",
-                      border: "none",
-                      borderRadius: "0.5rem",
-                      backgroundColor: course.enrolled ? "#ef4444" : "#22c55e",
-                      color: "#fff",
-                      fontWeight: "600",
-                      cursor: "pointer",
-                      transition: "background 0.3s",
-                      fontSize: "0.9rem"
-                    }}
-                    onMouseEnter={e => {
-                      e.currentTarget.style.backgroundColor = course.enrolled ? "#dc2626" : "#16a34a";
-                    }}
-                    onMouseLeave={e => {
-                      e.currentTarget.style.backgroundColor = course.enrolled ? "#ef4444" : "#22c55e";
-                    }}
+                    onClick={() => handleEnrollment(course._id, course.enrolled, course.title)}
+                    className={`flex-1 px-3 py-2 rounded 
+                      ${course.enrolled
+                        ? "bg-red-100 text-red-600 hover:bg-red-200"
+                        : "bg-green-600 text-white hover:bg-green-700"} font-semibold`}
                   >
                     {course.enrolled ? "Unenroll" : "Enroll"}
                   </button>
-
                   {course.enrolled && (
                     <button
-                      onClick={() => navigate(`/courses/${course.id}`)}
-                      style={{
-                        padding: "0.5rem 1rem",
-                        borderRadius: "0.5rem",
-                        background: "#3b82f6",
-                        color: "#fff",
-                        border: "none",
-                        fontWeight: "600",
-                        cursor: "pointer"
-                      }}
+                      onClick={() => navigate(`/courses/${course._id}`)}
+                      className="flex-1 px-3 py-2 rounded bg-blue-500 text-white hover:bg-blue-700 font-semibold"
                     >
                       View
                     </button>
                   )}
-
-                  {course.enrolled && course.progress < 100 && (
-                    <button
-                      onClick={() => handleProgressUpdate(course.id, course.progress)}
-                      style={{
-                        padding: "0.5rem 0.8rem",
-                        border: "2px solid #22c55e",
-                        borderRadius: "0.5rem",
-                        backgroundColor: "white",
-                        color: "#22c55e",
-                        fontWeight: "600",
-                        cursor: "pointer",
-                        transition: "all 0.3s",
-                        fontSize: "0.8rem"
-                      }}
-                      onMouseEnter={e => { e.target.style.backgroundColor = "#22c55e"; e.target.style.color = "white"; }}
-                      onMouseLeave={e => { e.target.style.backgroundColor = "white"; e.target.style.color = "#22c55e"; }}
-                    >
-                      +10%
-                    </button>
-                  )}
-
-                  {course.enrolled && course.progress === 100 && (
-                    <div style={{
-                      padding: "0.5rem 0.8rem",
-                      borderRadius: "0.5rem",
-                      backgroundColor: "#fbbf24",
-                      color: "white",
-                      fontWeight: "600",
-                      fontSize: "0.8rem",
-                      textAlign: "center"
-                    }}>
-                      🎉 Done!
-                    </div>
-                  )}
                 </div>
-
-                {/* Quizzes for Enrolled Students */}
-                {course.enrolled && course.quizzes && course.quizzes.length > 0 && (
-                  <div style={{ marginTop: "1.1rem", background: "#f4f8fd", borderRadius: "7px", padding: "0.7rem" }}>
-                    <div style={{ fontWeight: 600, marginBottom: ".3rem", color: "#0ea5e9" }}>
-                      Quizzes
-                    </div>
-                    <ul style={{ margin: 0, paddingLeft: 16 }}>
-                      {course.quizzes.map(q => (
-                        <li key={q.id} style={{ marginBottom: 3 }}>
-                          <Link
-                            to={`/courses/${course.id}/quizzes/${q.id}`}
-                            style={{ color: "#3b82f6", textDecoration: "underline", fontWeight: 500 }}
-                          >
-                            {q.title}
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
               </div>
             </div>
           ))
         ) : (
-          <p style={{ fontSize: "1rem", color: "#999" }}>No courses found.</p>
+          <p className="text-gray-500 col-span-full text-center">No courses match your criteria.</p>
         )}
       </div>
     </div>
