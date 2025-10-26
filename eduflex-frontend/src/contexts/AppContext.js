@@ -1,196 +1,258 @@
 // src/contexts/AppContext.js
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import api from '../config/api';
+import { toast } from 'react-toastify';
 
 const AppContext = createContext();
-
-export const useApp = () => {
-  const context = useContext(AppContext);
-  if (!context) {
-    throw new Error('useApp must be used within an AppProvider');
-  }
-  return context;
-};
-
-// Mock data - we'll replace this with API calls later
-const mockCoursesData = [
-  {
-    id: 1,
-    title: "Web Development",
-    description: "Learn HTML, CSS, JavaScript, and React to build modern web apps.",
-    instructor: "Prof. Sharma",
-    image: "https://images.unsplash.com/photo-1523475496153-3d6cc3000f4c?auto=format&fit=crop&w=400&q=80",
-    enrolled: true,
-    progress: 75
-  },
-  {
-    id: 2,
-    title: "Data Structures",
-    description: "Understand algorithms, linked lists, stacks, queues, and trees.",
-    instructor: "Dr. Verma", 
-    image: "https://images.unsplash.com/photo-1537432376769-00a53c6b9333?auto=format&fit=crop&w=400&q=80",
-    enrolled: true,
-    progress: 60
-  },
-  {
-    id: 3,
-    title: "Computer Networks",
-    description: "Dive into TCP/IP, routing, DNS, and network security fundamentals.",
-    instructor: "Prof. Iyer",
-    image: "https://images.unsplash.com/photo-1590608897129-79da98d159e9?auto=format&fit=crop&w=400&q=80",
-    enrolled: false,
-    progress: 0
-  },
-  {
-    id: 4,
-    title: "Database Systems", 
-    description: "Master SQL, relational databases, and data modeling techniques.",
-    instructor: "Dr. Banerjee",
-    image: "https://images.unsplash.com/photo-1555066931-4365d14bab8c?auto=format&fit=crop&w=400&q=80",
-    enrolled: true,
-    progress: 40
-  }
-];
-
-// Updated assignments with edit submission support
-const mockAssignmentsData = [
-  { 
-    id: 1, 
-    title: "React Component Assignment", 
-    course: "Web Development", 
-    status: "pending", 
-    due: "2025-09-25", 
-    progress: 0,
-    submittedAt: null,
-    lastEditedAt: null,
-    submissionData: { text: "", fileName: null }
-  },
-  { 
-    id: 2, 
-    title: "Binary Tree Implementation", 
-    course: "Data Structures", 
-    status: "submitted", 
-    due: "2025-09-20", 
-    progress: 100,
-    submittedAt: "2025-09-18T10:30:00",
-    lastEditedAt: null,
-    submissionData: { 
-      text: "Binary tree implementation completed with all required methods: insert, delete, search, traversal (inorder, preorder, postorder). Includes balanced tree operations and proper error handling.", 
-      fileName: "tree_implementation.py" 
-    }
-  },
-  { 
-    id: 3, 
-    title: "Database Design Project", 
-    course: "Database Systems", 
-    status: "pending", 
-    due: "2025-09-30", 
-    progress: 25,
-    submittedAt: null,
-    lastEditedAt: null,
-    submissionData: { text: "", fileName: null }
-  },
-  { 
-    id: 4, 
-    title: "CSS Grid Layout", 
-    course: "Web Development", 
-    status: "graded", 
-    due: "2025-09-15", 
-    progress: 100, 
-    grade: "A",
-    submittedAt: "2025-09-14T16:45:00",
-    lastEditedAt: "2025-09-15T09:20:00",
-    submissionData: { 
-      text: "CSS Grid layout project completed with responsive design, modern grid techniques, and accessibility features. Includes mobile-first approach and cross-browser compatibility.", 
-      fileName: "grid_layout.html" 
-    }
-  }
-];
-
-const mockGradesData = [
-  { id: 1, course: "Web Development", assignment: "CSS Grid Layout", grade: "A", score: "92%", date: "2025-09-16" },
-  { id: 2, course: "Data Structures", assignment: "Array Operations", grade: "B+", score: "85%", date: "2025-09-10" },
-  { id: 3, course: "Database Systems", assignment: "SQL Queries", grade: "A-", score: "88%", date: "2025-09-12" },
-  { id: 4, course: "Web Development", assignment: "JavaScript Functions", grade: "B", score: "80%", date: "2025-09-08" }
-];
+export const useApp = () => useContext(AppContext);
 
 export const AppProvider = ({ children }) => {
-  const [courses, setCourses] = useState([]);
-  const [assignments, setAssignments] = useState([]);
-  const [grades, setGrades] = useState([]);
+  const [user, setUser] = useState(null);
+  const [token, setToken] = useState(localStorage.getItem('authToken'));
   const [loading, setLoading] = useState(true);
 
-  // Simulate data loading
-  useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      setCourses(mockCoursesData);
-      setAssignments(mockAssignmentsData);
-      setGrades(mockGradesData);
+  // ------- AUTH --------
+  const loginUser = async (email, password) => {
+    setLoading(true);
+    try {
+      const { data } = await api.post('/auth/login', { email, password });
+      localStorage.setItem('authToken', data.token);
+      localStorage.setItem('currentUser', JSON.stringify(data.user));
+      setToken(data.token);
+      setUser(data.user);
+      toast.success(`Welcome back, ${data.user.name}!`);
+      return data.user;
+    } catch {
+      // Error handled globally
+      return null;
+    } finally {
       setLoading(false);
-    };
-
-    loadData();
-  }, []);
-
-  // Functions to update data
-  const updateCourseProgress = (courseId, progress) => {
-    setCourses(prev => prev.map(course => 
-      course.id === courseId ? { ...course, progress } : course
-    ));
-  };
-
-  // Enhanced assignment update function
-  const updateAssignmentStatus = (assignmentId, status, progress = null) => {
-    setAssignments(prev => prev.map(assignment => 
-      assignment.id === assignmentId 
-        ? { 
-            ...assignment, 
-            status, 
-            ...(progress !== null && { progress })
-          }
-        : assignment
-    ));
-  };
-
-  const addGrade = (gradeData) => {
-    setGrades(prev => [gradeData, ...prev]);
-  };
-
-  // Computed values
-  const enrolledCourses = courses.filter(course => course.enrolled);
-  const pendingAssignments = assignments.filter(assignment => assignment.status === 'pending');
-  const recentGrades = grades.slice(0, 5);
-
-  const value = {
-    // Data
-    courses,
-    assignments, 
-    grades,
-    loading,
-    
-    // Computed data
-    enrolledCourses,
-    pendingAssignments,
-    recentGrades,
-    
-    // Actions
-    updateCourseProgress,
-    updateAssignmentStatus,
-    addGrade,
-    
-    // Stats
-    stats: {
-      totalCourses: enrolledCourses.length,
-      pendingAssignments: pendingAssignments.length,
-      averageGrade: grades.length > 0 ? (grades.reduce((acc, grade) => {
-        const numGrade = grade.score.replace('%', '');
-        return acc + parseInt(numGrade);
-      }, 0) / grades.length).toFixed(1) : 0
     }
   };
+
+  const logoutUser = useCallback(() => {
+    if (window.confirm('Are you sure you want to logout?')) {
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('currentUser');
+      setToken(null);
+      setUser(null);
+      toast.info('You have been logged out.');
+    }
+  }, []);
+
+  // On mount: try to load user from token or fetch from /me
+  useEffect(() => {
+    const loadInitialUser = async () => {
+      setLoading(true);
+      const storedToken = localStorage.getItem('authToken');
+      const storedUser = localStorage.getItem('currentUser');
+      if (storedToken) {
+        setToken(storedToken);
+        if (storedUser) setUser(JSON.parse(storedUser));
+        else {
+          try {
+            const { data } = await api.get('/auth/me');
+            setUser(data);
+            localStorage.setItem('currentUser', JSON.stringify(data));
+          } catch {}
+        }
+      }
+      setLoading(false);
+    };
+    loadInitialUser();
+  }, []);
+
+  // ---------------------------------------
+  //            PROFESSOR FUNCTIONS
+  // ---------------------------------------
+  const getMyProfessorCourses = async () => {
+    try {
+      const { data } = await api.get('/professor/courses');
+      return data;
+    } catch {}
+  };
+
+  const getProfessorCourseById = async (courseId) => {
+  try {
+    const { data } = await api.get(`/professor/courses/${courseId}`);
+    return data;
+  } catch {
+    return null;
+  }
+};
+
+const getAssignmentsForCourse = async (courseId) => {
+  try {
+    const { data } = await api.get(`/professor/courses/${courseId}/assignments`);
+    return data;
+  } catch {
+    return [];
+  }
+};
+
+  const createCourse = async (courseData) => {
+    try {
+      const { data } = await api.post('/professor/courses', courseData);
+      toast.success('Course created!');
+      return data;
+    } catch {}
+  };
+
+  const updateCourse = async (courseId, updateData) => {
+    try {
+      const { data } = await api.put(`/professor/courses/${courseId}`, updateData);
+      toast.success('Course updated!');
+      return data;
+    } catch {}
+  };
+
+  const deleteCourse = async (courseId) => {
+    try {
+      await api.delete(`/professor/courses/${courseId}`);
+      toast.success('Course deleted!');
+    } catch {}
+  };
+
+  const addMaterialToCourse = async (courseId, materialData) => {
+    try {
+      const { data } = await api.post(`/professor/courses/${courseId}/materials`, materialData);
+      toast.success('Material added!');
+      return data;
+    } catch {}
+  };
+
+  const createAssignment = async (courseId, assignmentData) => {
+    try {
+      const { data } = await api.post(`/professor/courses/${courseId}/assignments`, assignmentData);
+      toast.success('Assignment created!');
+      return data;
+    } catch {}
+  };
+
+  const getProfessorAssignments = async (courseId) => {
+    try {
+      const { data } = await api.get(`/professor/courses/${courseId}/assignments`);
+      return data;
+    } catch {}
+  };
+
+  const getSubmissionsForAssignment = async (assignmentId) => {
+    try {
+      const { data } = await api.get(`/professor/assignments/${assignmentId}/submissions`);
+      return data;
+    } catch {}
+  };
+
+  const gradeSubmission = async (assignmentId, studentId, gradeData) => {
+    try {
+      await api.patch(`/professor/assignments/${assignmentId}/grade`, { studentId, ...gradeData });
+      toast.success('Submission graded!');
+    } catch {}
+  };
+
+  // Quiz routes for professors (optional)
+  const addQuizToCourse = async (courseId, quizData) => {
+    try {
+      await api.post(`/professor/courses/${courseId}/quizzes`, quizData);
+      toast.success('Quiz created!');
+    } catch {}
+  };
+  const addQuestionToQuiz = async (courseId, quizId, questionData) => {
+    try {
+      await api.post(`/professor/courses/${courseId}/quizzes/${quizId}/questions`, questionData);
+      toast.success('Question added!');
+    } catch {}
+  };
+
+  // ---------------------------------------
+  //                 STUDENT FUNCTIONS
+  // ---------------------------------------
+  const getMyStudentCourses = async () => {
+    try {
+      const { data } = await api.get('/student/courses');
+      return data;
+    } catch {}
+  };
+
+  const getStudentAssignmentsForCourse = async (courseId) => {
+    try {
+      const { data } = await api.get(`/student/courses/${courseId}/assignments`);
+      return data;
+    } catch {}
+  };
+
+  const submitAssignment = async (assignmentId, submissionData) => {
+    try {
+      await api.post(`/student/assignments/${assignmentId}/submit`, submissionData);
+      toast.success('Assignment submitted!');
+    } catch {}
+  };
+
+  const getMyGrades = async () => {
+    try {
+      const { data } = await api.get(`/student/grades`);
+      return data;
+    } catch {}
+  };
+
+  const submitQuiz = async (courseId, quizId, answers) => {
+    try {
+      await api.post(`/student/courses/${courseId}/quizzes/${quizId}/submit`, { answers });
+      toast.success('Quiz submitted!');
+    } catch {}
+  };
+
+  // ---------------------------------------
+  //                  ADMIN  
+  // ---------------------------------------
+  const getAllUsers = async () => {
+    try {
+      const { data } = await api.get('/admin/users');
+      return data;
+    } catch {}
+  };
+
+  const createUser = async (userData) => {
+    try {
+      await api.post('/admin/users', userData);
+      toast.success('User created!');
+    } catch {}
+  };
+
+  // ---------------------------------------
+  //               PROFILE / GENERAL
+  // ---------------------------------------
+  const updateUserProfile = async (profileData) => {
+    try {
+      await api.put('/users/profile', profileData);
+      setUser(prev => ({ ...prev, ...profileData }));
+      toast.success('Profile updated!');
+    } catch {}
+  };
+
+  // ---------------------------------------
+  //           VALUE & PROVIDER
+  // ---------------------------------------
+  const value = {
+  user, token, loading,
+  loginUser, logoutUser,
+  // Professor
+  getMyProfessorCourses,
+  getProfessorCourseById,            // <--- add this
+  getAssignmentsForCourse,           // <--- and this, if used
+  createCourse, updateCourse, deleteCourse, addMaterialToCourse,
+  createAssignment, getProfessorAssignments,
+  getSubmissionsForAssignment, gradeSubmission,
+  addQuizToCourse, addQuestionToQuiz,
+  // Student
+  getMyStudentCourses, getStudentAssignmentsForCourse, submitAssignment,
+  getMyGrades, submitQuiz,
+  // Admin
+  getAllUsers, createUser,
+  // Profile
+  updateUserProfile,
+};
+
 
   return (
     <AppContext.Provider value={value}>
