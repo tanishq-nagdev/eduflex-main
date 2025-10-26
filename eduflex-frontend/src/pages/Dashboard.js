@@ -28,8 +28,8 @@ function Dashboard() {
   const [search, setSearch] = useState("");
   const navigate = useNavigate();
   
-  // ADD THE GLOBAL STATE VARIABLES
-  const { loading, stats } = useApp();
+  // GET ALL CONTEXT VALUES INCLUDING BACKEND STATUS
+  const { loading, stats, backendConnected } = useApp();
 
   useEffect(() => {
     const mapNumberRange = (n, a, b, c, d) =>
@@ -38,6 +38,8 @@ function Dashboard() {
     const initCard = (card) => {
       const cardContent = card.querySelector(".card__content");
       const gloss = card.querySelector(".card__gloss");
+
+      if (!cardContent || !gloss) return;
 
       requestAnimationFrame(() => {
         gloss.classList.add("card__gloss--animatable");
@@ -104,7 +106,34 @@ function Dashboard() {
         Dashboard
       </h1>
 
-      {/* Floating Badge Stats - REPLACE THE GREEN TEST BOX */}
+      {/* Backend Connection Status */}
+      {backendConnected ? (
+        <div style={{ 
+          background: '#d4edda', 
+          color: '#155724', 
+          padding: '0.5rem 1rem', 
+          borderRadius: '0.5rem',
+          marginBottom: '1rem',
+          fontSize: '0.9rem',
+          border: '1px solid #c3e6cb'
+        }}>
+          ✅ Connected to Backend Server
+        </div>
+      ) : (
+        <div style={{ 
+          background: '#fff3cd', 
+          color: '#856404', 
+          padding: '0.5rem 1rem', 
+          borderRadius: '0.5rem',
+          marginBottom: '1rem',
+          fontSize: '0.9rem',
+          border: '1px solid #ffeaa7'
+        }}>
+          ⚠️ Using Demo Data (Backend Offline)
+        </div>
+      )}
+
+      {/* Floating Badge Stats */}
       <div style={{ position: "relative", marginBottom: "3rem", minHeight: "80px" }}>
         <div style={{
           position: "absolute",

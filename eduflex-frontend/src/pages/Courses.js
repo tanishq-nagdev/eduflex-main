@@ -1,44 +1,50 @@
 import React, { useState } from "react";
 import { useApp } from "../contexts/AppContext";
 import SearchIcon from "../assets/search.svg";
+import { Link, useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
 
 function Courses() {
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState("all"); // all, enrolled, available
-  const { courses, updateCourseProgress, loading } = useApp();
+  const [filter, setFilter] = useState("all");
+  const {
+    courses,
+    updateCourseProgress,
+    enrollInCourse,
+    unenrollFromCourse,
+    loading
+  } = useApp();
+
+  const navigate = useNavigate();
 
   // Filter courses based on enrollment and search
   const filteredCourses = courses.filter((course) => {
     const matchesSearch = course.title.toLowerCase().includes(search.toLowerCase()) ||
       course.description.toLowerCase().includes(search.toLowerCase()) ||
-      course.instructor.toLowerCase().includes(search.toLowerCase());
-    
-    const matchesFilter = filter === "all" || 
-                         (filter === "enrolled" && course.enrolled) ||
-                         (filter === "available" && !course.enrolled);
-    
+      (course.instructor && course.instructor.toLowerCase().includes(search.toLowerCase()));
+    const matchesFilter = filter === "all" ||
+      (filter === "enrolled" && course.enrolled) ||
+      (filter === "available" && !course.enrolled);
+
     return matchesSearch && matchesFilter;
   });
 
-  // Handle enrollment toggle
+  // Handle enrollment toggle via context functions
   const handleEnrollment = (courseId) => {
     const course = courses.find(c => c.id === courseId);
-    if (course) {
-      course.enrolled = !course.enrolled;
-      if (!course.enrolled) {
-        course.progress = 0; // Reset progress when unenrolling
-      }
-      updateCourseProgress(courseId, course.progress);
+    if (course.enrolled) {
+      unenrollFromCourse(courseId);
+      toast.success(`Unenrolled from ${course.title}`);
+    } else {
+      enrollInCourse(courseId);
+      toast.success(`Successfully enrolled in ${course.title}!`);
     }
   };
 
   // Handle progress update
-  const handleProgressUpdate = (courseId) => {
-    const course = courses.find(c => c.id === courseId);
-    if (course && course.enrolled) {
-      const newProgress = Math.min(course.progress + 10, 100);
-      updateCourseProgress(courseId, newProgress);
-    }
+  const handleProgressUpdate = (courseId, currentProgress) => {
+    const newProgress = Math.min(currentProgress + 10, 100);
+    updateCourseProgress(courseId, newProgress);
   };
 
   if (loading) {
@@ -55,7 +61,7 @@ function Courses() {
             margin: "0 auto 1rem"
           }}></div>
           <p>Loading courses...</p>
-          <style jsx>{`
+          <style>{`
             @keyframes spin {
               0% { transform: rotate(0deg); }
               100% { transform: rotate(360deg); }
@@ -69,36 +75,28 @@ function Courses() {
   return (
     <div style={{ padding: "2rem", marginLeft: "64px", minHeight: "100vh" }}>
       {/* Header */}
-      <h1 style={{ fontSize: "2rem", fontWeight: "bold", marginBottom: "0.5rem" }}>
-        Courses
-      </h1>
+      <h1 style={{ fontSize: "2rem", fontWeight: "bold", marginBottom: "0.5rem" }}>Courses</h1>
       <p style={{ fontSize: "1rem", color: "#555", marginBottom: "1.5rem" }}>
         Browse all available courses. Use the search bar to quickly find what you need.
       </p>
 
       {/* Stats Cards */}
       <div style={{ display: "flex", gap: "1rem", marginBottom: "1.5rem" }}>
-        <div style={{ 
-          background: "linear-gradient(135deg, #22c55e, #16a34a)", 
-          color: "white", 
-          padding: "1rem", 
-          borderRadius: "0.5rem",
-          minWidth: "120px",
-          textAlign: "center"
+        <div style={{
+          background: "linear-gradient(135deg, #22c55e, #16a34a)",
+          color: "white", padding: "1rem", borderRadius: "0.5rem",
+          minWidth: "120px", textAlign: "center"
         }}>
           <div style={{ fontSize: "1.5rem", fontWeight: "bold" }}>
             {courses.filter(c => c.enrolled).length}
           </div>
           <div style={{ fontSize: "0.8rem", opacity: 0.9 }}>Enrolled</div>
         </div>
-        
-        <div style={{ 
-          background: "linear-gradient(135deg, #3b82f6, #1d4ed8)", 
-          color: "white", 
-          padding: "1rem", 
-          borderRadius: "0.5rem",
-          minWidth: "120px",
-          textAlign: "center"
+
+        <div style={{
+          background: "linear-gradient(135deg, #3b82f6, #1d4ed8)",
+          color: "white", padding: "1rem", borderRadius: "0.5rem",
+          minWidth: "120px", textAlign: "center"
         }}>
           <div style={{ fontSize: "1.5rem", fontWeight: "bold" }}>
             {courses.filter(c => !c.enrolled).length}
@@ -172,9 +170,9 @@ function Courses() {
         {filteredCourses.length > 0 ? (
           filteredCourses.map((course) => (
             <div
-              key={course.id}
+              key={course.id || course._id}
               style={{
-                width: "280px",
+                width: "320px",
                 background: "#fff",
                 borderRadius: "1rem",
                 overflow: "hidden",
@@ -182,10 +180,12 @@ function Courses() {
                 transition: "transform 0.3s ease",
                 cursor: "pointer",
                 border: course.enrolled ? "3px solid #22c55e" : "3px solid transparent",
-                position: "relative"
+                position: "relative",
+                display: "flex",
+                flexDirection: "column"
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.03)")}
-              onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
+              onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.03)"; }}
+              onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; }}
             >
               {/* Enrollment Badge */}
               {course.enrolled && (
@@ -208,14 +208,10 @@ function Courses() {
               <img
                 src={course.image}
                 alt={course.title}
-                style={{
-                  width: "100%",
-                  height: "160px",
-                  objectFit: "cover",
-                }}
+                style={{ width: "100%", height: "160px", objectFit: "cover" }}
               />
-              
-              <div style={{ padding: "1rem" }}>
+
+              <div style={{ padding: "1rem", flex: "1" }}>
                 <h2 style={{ fontSize: "1.25rem", fontWeight: "600", marginBottom: "0.5rem" }}>
                   {course.title}
                 </h2>
@@ -226,34 +222,23 @@ function Courses() {
                   Instructor: {course.instructor}
                 </p>
 
-                {/* Progress Bar for Enrolled Courses */}
+                {/* Progress Bar */}
                 {course.enrolled && (
                   <div style={{ marginBottom: "0.8rem" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
                       <span style={{ fontSize: "0.8rem", color: "#666" }}>Progress</span>
                       <span style={{ fontSize: "0.8rem", fontWeight: "bold", color: "#22c55e" }}>{course.progress}%</span>
                     </div>
-                    <div style={{
-                      width: "100%",
-                      height: "6px",
-                      backgroundColor: "#e5e7eb",
-                      borderRadius: "3px",
-                      overflow: "hidden"
-                    }}>
-                      <div style={{
-                        width: `${course.progress}%`,
-                        height: "100%",
-                        backgroundColor: "#22c55e",
-                        transition: "width 0.3s ease"
-                      }} />
+                    <div style={{ width: "100%", height: "6px", backgroundColor: "#e5e7eb", borderRadius: "3px", overflow: "hidden" }}>
+                      <div style={{ width: `${course.progress}%`, height: "100%", backgroundColor: "#22c55e", transition: "width 0.3s ease" }} />
                     </div>
                   </div>
                 )}
 
                 {/* Action Buttons */}
-                <div style={{ display: "flex", gap: "0.5rem" }}>
+                <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end", flexWrap: "wrap" }}>
                   <button
-                    onClick={() => handleEnrollment(course.id)}
+                    onClick={() => handleEnrollment(course.id, course.enrolled)}
                     style={{
                       flex: "1",
                       padding: "0.5rem 1rem",
@@ -266,20 +251,36 @@ function Courses() {
                       transition: "background 0.3s",
                       fontSize: "0.9rem"
                     }}
-                    onMouseEnter={(e) => {
+                    onMouseEnter={e => {
                       e.currentTarget.style.backgroundColor = course.enrolled ? "#dc2626" : "#16a34a";
                     }}
-                    onMouseLeave={(e) => {
+                    onMouseLeave={e => {
                       e.currentTarget.style.backgroundColor = course.enrolled ? "#ef4444" : "#22c55e";
                     }}
                   >
                     {course.enrolled ? "Unenroll" : "Enroll"}
                   </button>
 
-                  {/* Progress Button for Enrolled Courses */}
+                  {course.enrolled && (
+                    <button
+                      onClick={() => navigate(`/courses/${course.id}`)}
+                      style={{
+                        padding: "0.5rem 1rem",
+                        borderRadius: "0.5rem",
+                        background: "#3b82f6",
+                        color: "#fff",
+                        border: "none",
+                        fontWeight: "600",
+                        cursor: "pointer"
+                      }}
+                    >
+                      View
+                    </button>
+                  )}
+
                   {course.enrolled && course.progress < 100 && (
                     <button
-                      onClick={() => handleProgressUpdate(course.id)}
+                      onClick={() => handleProgressUpdate(course.id, course.progress)}
                       style={{
                         padding: "0.5rem 0.8rem",
                         border: "2px solid #22c55e",
@@ -291,20 +292,13 @@ function Courses() {
                         transition: "all 0.3s",
                         fontSize: "0.8rem"
                       }}
-                      onMouseEnter={(e) => {
-                        e.target.style.backgroundColor = "#22c55e";
-                        e.target.style.color = "white";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.target.style.backgroundColor = "white";
-                        e.target.style.color = "#22c55e";
-                      }}
+                      onMouseEnter={e => { e.target.style.backgroundColor = "#22c55e"; e.target.style.color = "white"; }}
+                      onMouseLeave={e => { e.target.style.backgroundColor = "white"; e.target.style.color = "#22c55e"; }}
                     >
                       +10%
                     </button>
                   )}
 
-                  {/* Completed Badge */}
                   {course.enrolled && course.progress === 100 && (
                     <div style={{
                       padding: "0.5rem 0.8rem",
@@ -319,6 +313,27 @@ function Courses() {
                     </div>
                   )}
                 </div>
+
+                {/* Quizzes for Enrolled Students */}
+                {course.enrolled && course.quizzes && course.quizzes.length > 0 && (
+                  <div style={{ marginTop: "1.1rem", background: "#f4f8fd", borderRadius: "7px", padding: "0.7rem" }}>
+                    <div style={{ fontWeight: 600, marginBottom: ".3rem", color: "#0ea5e9" }}>
+                      Quizzes
+                    </div>
+                    <ul style={{ margin: 0, paddingLeft: 16 }}>
+                      {course.quizzes.map(q => (
+                        <li key={q.id} style={{ marginBottom: 3 }}>
+                          <Link
+                            to={`/courses/${course.id}/quizzes/${q.id}`}
+                            style={{ color: "#3b82f6", textDecoration: "underline", fontWeight: 500 }}
+                          >
+                            {q.title}
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             </div>
           ))
