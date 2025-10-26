@@ -1,32 +1,62 @@
 // src/contexts/AppContext.js
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import api from '../config/api';
+import api from '../config/api'; // Use the configured Axios instance
 import { toast } from 'react-toastify';
 
 const AppContext = createContext();
-export const useApp = () => useContext(AppContext);
+
+export const useApp = () => {
+  const context = useContext(AppContext);
+  if (!context) throw new Error("useApp must be used within an AppProvider");
+  return context;
+};
 
 export const AppProvider = ({ children }) => {
+  // Authentication State
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(localStorage.getItem('authToken'));
-  const [loading, setLoading] = useState(true);
+  const [authLoading, setAuthLoading] = useState(true); // Loading for initial auth check
 
-  // ------- AUTH --------
+  // Data State (Add placeholders for data to be fetched later)
+  const [allCourses, setAllCourses] = useState([]);
+  const [myCourses, setMyCourses] = useState([]);
+  const [myAssignments, setMyAssignments] = useState([]);
+  const [allUsers, setAllUsers] = useState([]);
+  const [dataLoading, setDataLoading] = useState({
+      courses: false,
+      assignments: false,
+      users: false,
+  });
+
+   // --- Authentication ---
+
   const loginUser = async (email, password) => {
-    setLoading(true);
+    setAuthLoading(true); // Indicate loading start
     try {
+      // Make the API call to the backend login endpoint
       const { data } = await api.post('/auth/login', { email, password });
-      localStorage.setItem('authToken', data.token);
-      localStorage.setItem('currentUser', JSON.stringify(data.user));
-      setToken(data.token);
-      setUser(data.user);
-      toast.success(`Welcome back, ${data.user.name}!`);
-      return data.user;
-    } catch {
-      // Error handled globally
-      return null;
-    } finally {
-      setLoading(false);
+
+      // Check if response includes token and user data
+      if (data.token && data.user) {
+        // Store token and user data in localStorage
+        localStorage.setItem('authToken', data.token);
+        localStorage.setItem('currentUser', JSON.stringify(data.user)); // Store user object
+
+        // Update React state
+        setToken(data.token);
+        setUser(data.user); // Store the full user object from response
+
+        toast.success(`Welcome back, ${data.user.name}!`);
+        setAuthLoading(false);
+        return data.user; // Return user data for successful login
+      } else {
+        throw new Error("Login response missing token or user data.");
+      }
+    } catch (error) {
+      // Error is logged/toasted by Axios interceptor
+      console.error('Login failed in context:', error);
+      setAuthLoading(false);
+      return null; // Return null to indicate login failure
     }
   };
 
@@ -36,227 +66,95 @@ export const AppProvider = ({ children }) => {
       localStorage.removeItem('currentUser');
       setToken(null);
       setUser(null);
+      // Clear data state
+      setAllCourses([]);
+      setMyCourses([]);
+      setMyAssignments([]);
+      setAllUsers([]);
       toast.info('You have been logged out.');
+      // Navigation should happen in the component calling this
     }
   }, []);
 
-  // On mount: try to load user from token or fetch from /me
+  // Effect to load user info on initial app load if token exists
   useEffect(() => {
     const loadInitialUser = async () => {
-      setLoading(true);
       const storedToken = localStorage.getItem('authToken');
       const storedUser = localStorage.getItem('currentUser');
+
       if (storedToken) {
-        setToken(storedToken);
-        if (storedUser) setUser(JSON.parse(storedUser));
-        else {
+        setToken(storedToken); // Set token state
+        if (storedUser) {
           try {
+            setUser(JSON.parse(storedUser)); // Set user state from storage
+          } catch {
+            localStorage.removeItem('currentUser'); // Clear invalid JSON
+          }
+        }
+        // Optional: Verify token with /auth/me to ensure it's still valid
+        // and get fresh user data (especially role)
+        try {
+            console.log("Verifying token with /auth/me...");
             const { data } = await api.get('/auth/me');
-            setUser(data);
-            localStorage.setItem('currentUser', JSON.stringify(data));
-          } catch {}
+            // Update user state and storage if data differs or was missing
+            if (!storedUser || JSON.parse(storedUser)._id !== data._id || JSON.parse(storedUser).role !== data.role) {
+               console.log("Updating stored user data from /auth/me");
+               setUser(data);
+               localStorage.setItem('currentUser', JSON.stringify(data));
+            }
+        } catch (error) {
+            // Interceptor handles 401 (invalid token -> logout)
+            console.error("Token verification failed or token expired.");
+            // Explicitly clear state if /me fails for safety
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('currentUser');
+            setToken(null);
+            setUser(null);
         }
       }
-      setLoading(false);
+      setAuthLoading(false); // Finished initial loading attempt
     };
     loadInitialUser();
-  }, []);
+  }, []); // Run only once on mount
 
-  // ---------------------------------------
-  //            PROFESSOR FUNCTIONS
-  // ---------------------------------------
-  const getMyProfessorCourses = async () => {
-    try {
-      const { data } = await api.get('/professor/courses');
-      return data;
-    } catch {}
-  };
+    // --- Placeholder API Call Functions --- (Keep these as placeholders for now)
+    const fetchAllCourses = useCallback(async () => { console.warn("API: fetchAllCourses not implemented"); return []; }, []);
+    const fetchMyStudentCourses = useCallback(async () => { console.warn("API: fetchMyStudentCourses not implemented"); return []; }, []);
+    const fetchMyProfessorCourses = useCallback(async () => { console.warn("API: fetchMyProfessorCourses not implemented"); return []; }, []);
+    const fetchMyGrades = useCallback(async () => { console.warn("API: fetchMyGrades not implemented"); return []; }, []);
+    const fetchProfessorAssignments = useCallback(async () => { console.warn("API: fetchProfessorAssignments not implemented"); return []; }, []);
+    const createCourse = async (courseData) => { console.warn("API: createCourse not implemented"); throw new Error("Not implemented"); };
+    const updateCourse = async (courseId, updateData) => { console.warn("API: updateCourse not implemented"); throw new Error("Not implemented"); };
+    const deleteCourse = async (courseId) => { console.warn("API: deleteCourse not implemented"); throw new Error("Not implemented"); };
+    const createAssignment = async (assignmentData) => { console.warn("API: createAssignment not implemented"); throw new Error("Not implemented"); };
+    const submitAssignment = async (assignmentId, submissionText) => { console.warn("API: submitAssignment not implemented"); throw new Error("Not implemented"); };
+    const gradeSubmission = async (assignmentId, studentId, grade, feedback) => { console.warn("API: gradeSubmission not implemented"); throw new Error("Not implemented"); };
+    const fetchAllUsersAdmin = useCallback(async () => { console.warn("API: fetchAllUsersAdmin not implemented"); return []; }, []);
+    const createUser = async (userData) => { console.warn("API: createUser not implemented"); throw new Error("Not implemented"); };
+    const updateUserProfile = async (profileData) => { console.warn("API: updateUserProfile not implemented"); throw new Error("Not implemented"); };
 
-  const getProfessorCourseById = async (courseId) => {
-  try {
-    const { data } = await api.get(`/professor/courses/${courseId}`);
-    return data;
-  } catch {
-    return null;
-  }
-};
 
-const getAssignmentsForCourse = async (courseId) => {
-  try {
-    const { data } = await api.get(`/professor/courses/${courseId}/assignments`);
-    return data;
-  } catch {
-    return [];
-  }
-};
-
-  const createCourse = async (courseData) => {
-    try {
-      const { data } = await api.post('/professor/courses', courseData);
-      toast.success('Course created!');
-      return data;
-    } catch {}
-  };
-
-  const updateCourse = async (courseId, updateData) => {
-    try {
-      const { data } = await api.put(`/professor/courses/${courseId}`, updateData);
-      toast.success('Course updated!');
-      return data;
-    } catch {}
-  };
-
-  const deleteCourse = async (courseId) => {
-    try {
-      await api.delete(`/professor/courses/${courseId}`);
-      toast.success('Course deleted!');
-    } catch {}
-  };
-
-  const addMaterialToCourse = async (courseId, materialData) => {
-    try {
-      const { data } = await api.post(`/professor/courses/${courseId}/materials`, materialData);
-      toast.success('Material added!');
-      return data;
-    } catch {}
-  };
-
-  const createAssignment = async (courseId, assignmentData) => {
-    try {
-      const { data } = await api.post(`/professor/courses/${courseId}/assignments`, assignmentData);
-      toast.success('Assignment created!');
-      return data;
-    } catch {}
-  };
-
-  const getProfessorAssignments = async (courseId) => {
-    try {
-      const { data } = await api.get(`/professor/courses/${courseId}/assignments`);
-      return data;
-    } catch {}
-  };
-
-  const getSubmissionsForAssignment = async (assignmentId) => {
-    try {
-      const { data } = await api.get(`/professor/assignments/${assignmentId}/submissions`);
-      return data;
-    } catch {}
-  };
-
-  const gradeSubmission = async (assignmentId, studentId, gradeData) => {
-    try {
-      await api.patch(`/professor/assignments/${assignmentId}/grade`, { studentId, ...gradeData });
-      toast.success('Submission graded!');
-    } catch {}
-  };
-
-  // Quiz routes for professors (optional)
-  const addQuizToCourse = async (courseId, quizData) => {
-    try {
-      await api.post(`/professor/courses/${courseId}/quizzes`, quizData);
-      toast.success('Quiz created!');
-    } catch {}
-  };
-  const addQuestionToQuiz = async (courseId, quizId, questionData) => {
-    try {
-      await api.post(`/professor/courses/${courseId}/quizzes/${quizId}/questions`, questionData);
-      toast.success('Question added!');
-    } catch {}
-  };
-
-  // ---------------------------------------
-  //                 STUDENT FUNCTIONS
-  // ---------------------------------------
-  const getMyStudentCourses = async () => {
-    try {
-      const { data } = await api.get('/student/courses');
-      return data;
-    } catch {}
-  };
-
-  const getStudentAssignmentsForCourse = async (courseId) => {
-    try {
-      const { data } = await api.get(`/student/courses/${courseId}/assignments`);
-      return data;
-    } catch {}
-  };
-
-  const submitAssignment = async (assignmentId, submissionData) => {
-    try {
-      await api.post(`/student/assignments/${assignmentId}/submit`, submissionData);
-      toast.success('Assignment submitted!');
-    } catch {}
-  };
-
-  const getMyGrades = async () => {
-    try {
-      const { data } = await api.get(`/student/grades`);
-      return data;
-    } catch {}
-  };
-
-  const submitQuiz = async (courseId, quizId, answers) => {
-    try {
-      await api.post(`/student/courses/${courseId}/quizzes/${quizId}/submit`, { answers });
-      toast.success('Quiz submitted!');
-    } catch {}
-  };
-
-  // ---------------------------------------
-  //                  ADMIN  
-  // ---------------------------------------
-  const getAllUsers = async () => {
-    try {
-      const { data } = await api.get('/admin/users');
-      return data;
-    } catch {}
-  };
-
-  const createUser = async (userData) => {
-    try {
-      await api.post('/admin/users', userData);
-      toast.success('User created!');
-    } catch {}
-  };
-
-  // ---------------------------------------
-  //               PROFILE / GENERAL
-  // ---------------------------------------
-  const updateUserProfile = async (profileData) => {
-    try {
-      await api.put('/users/profile', profileData);
-      setUser(prev => ({ ...prev, ...profileData }));
-      toast.success('Profile updated!');
-    } catch {}
-  };
-
-  // ---------------------------------------
-  //           VALUE & PROVIDER
-  // ---------------------------------------
+  // --- Value passed to consumers ---
   const value = {
-  user, token, loading,
-  loginUser, logoutUser,
-  // Professor
-  getMyProfessorCourses,
-  getProfessorCourseById,            // <--- add this
-  getAssignmentsForCourse,           // <--- and this, if used
-  createCourse, updateCourse, deleteCourse, addMaterialToCourse,
-  createAssignment, getProfessorAssignments,
-  getSubmissionsForAssignment, gradeSubmission,
-  addQuizToCourse, addQuestionToQuiz,
-  // Student
-  getMyStudentCourses, getStudentAssignmentsForCourse, submitAssignment,
-  getMyGrades, submitQuiz,
-  // Admin
-  getAllUsers, createUser,
-  // Profile
-  updateUserProfile,
-};
+    user,
+    token,
+    authLoading,
+    dataLoading, // Keep for future data loading states
+    loginUser,
+    logoutUser,
 
+    // Include placeholders for now
+    allCourses, myCourses, myAssignments, allUsers,
+    fetchAllCourses, fetchMyStudentCourses, fetchMyProfessorCourses,
+    fetchMyGrades, fetchProfessorAssignments, createCourse, updateCourse,
+    deleteCourse, createAssignment, submitAssignment, gradeSubmission,
+    fetchAllUsersAdmin, createUser, updateUserProfile,
+  };
 
+  // Render provider - show global loading only during initial auth check
   return (
     <AppContext.Provider value={value}>
-      {children}
+      {authLoading ? <div className="flex justify-center items-center h-screen">Initializing Session...</div> : children}
     </AppContext.Provider>
   );
 };
