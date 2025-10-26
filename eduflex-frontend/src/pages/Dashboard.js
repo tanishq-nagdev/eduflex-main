@@ -7,29 +7,26 @@ const cardsData = [
   {
     title: "Courses",
     description: "View and manage all your enrolled courses.",
-    image:
-      "https://images.unsplash.com/photo-1579645899072-e14c6b840afa?auto=format&fit=crop&w=400&q=80",
+    image: "https://images.unsplash.com/photo-1579645899072-e14c6b840afa?auto=format&fit=crop&w=400&q=80",
   },
   {
     title: "Assignments",
     description: "Check pending and submitted assignments.",
-    image:
-      "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&w=400&q=80",
+    image: "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&w=400&q=80",
   },
   {
     title: "Grades",
     description: "Track your performance and progress.",
-    image:
-      "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=400&q=80",
+    image: "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=400&q=80",
   },
 ];
 
 function Dashboard() {
   const [search, setSearch] = useState("");
   const navigate = useNavigate();
-  
+
   // GET ALL CONTEXT VALUES INCLUDING BACKEND STATUS
-  const { loading, stats, backendConnected } = useApp();
+  const { loading, stats = {}, backendConnected = false } = useApp();
 
   useEffect(() => {
     const mapNumberRange = (n, a, b, c, d) =>
@@ -38,30 +35,22 @@ function Dashboard() {
     const initCard = (card) => {
       const cardContent = card.querySelector(".card__content");
       const gloss = card.querySelector(".card__gloss");
-
       if (!cardContent || !gloss) return;
-
       requestAnimationFrame(() => {
         gloss.classList.add("card__gloss--animatable");
       });
-
       card.addEventListener("mousemove", (e) => {
         const pointerX = e.clientX;
         const pointerY = e.clientY;
         const cardRect = card.getBoundingClientRect();
-
         const halfWidth = cardRect.width / 2;
         const halfHeight = cardRect.height / 2;
-
         const cardCenterX = cardRect.left + halfWidth;
         const cardCenterY = cardRect.top + halfHeight;
-
         const deltaX = pointerX - cardCenterX;
         const deltaY = pointerY - cardCenterY;
-
         const distanceToCenter = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
         const maxDistance = Math.max(halfWidth, halfHeight);
-
         const degree = mapNumberRange(distanceToCenter, 0, maxDistance, 0, 10);
         const rx = mapNumberRange(deltaY, 0, halfWidth, 0, 1);
         const ry = mapNumberRange(deltaX, 0, halfHeight, 0, 1);
@@ -76,7 +65,6 @@ function Dashboard() {
           0.6
         )}`;
       });
-
       card.addEventListener("mouseleave", () => {
         cardContent.style = null;
         gloss.style.opacity = 0;
@@ -95,23 +83,22 @@ function Dashboard() {
   return (
     <div style={{ padding: "2rem", marginLeft: "5rem" }}>
       {/* Add floating animation CSS */}
-      <style jsx>{`
+      <style>{`
         @keyframes float {
           0%, 100% { transform: translateY(0px); }
           50% { transform: translateY(-10px); }
         }
       `}</style>
-
       <h1 style={{ fontSize: "2rem", fontWeight: "bold", marginBottom: "1rem" }}>
         Dashboard
       </h1>
 
       {/* Backend Connection Status */}
       {backendConnected ? (
-        <div style={{ 
-          background: '#d4edda', 
-          color: '#155724', 
-          padding: '0.5rem 1rem', 
+        <div style={{
+          background: '#d4edda',
+          color: '#155724',
+          padding: '0.5rem 1rem',
           borderRadius: '0.5rem',
           marginBottom: '1rem',
           fontSize: '0.9rem',
@@ -120,10 +107,10 @@ function Dashboard() {
           ✅ Connected to Backend Server
         </div>
       ) : (
-        <div style={{ 
-          background: '#fff3cd', 
-          color: '#856404', 
-          padding: '0.5rem 1rem', 
+        <div style={{
+          background: '#fff3cd',
+          color: '#856404',
+          padding: '0.5rem 1rem',
           borderRadius: '0.5rem',
           marginBottom: '1rem',
           fontSize: '0.9rem',
@@ -151,12 +138,11 @@ function Dashboard() {
           cursor: "pointer",
           transition: "transform 0.2s ease"
         }}
-        onMouseEnter={(e) => e.target.style.transform = "scale(1.05)"}
-        onMouseLeave={(e) => e.target.style.transform = "scale(1)"}
+          onMouseEnter={(e) => e.target.style.transform = "scale(1.05)"}
+          onMouseLeave={(e) => e.target.style.transform = "scale(1)"}
         >
-          📚 {stats.totalCourses} Courses
+          📚 {stats.totalCourses ?? 0} Courses
         </div>
-        
         <div style={{
           position: "absolute",
           top: "30px",
@@ -173,12 +159,11 @@ function Dashboard() {
           cursor: "pointer",
           transition: "transform 0.2s ease"
         }}
-        onMouseEnter={(e) => e.target.style.transform = "scale(1.05)"}
-        onMouseLeave={(e) => e.target.style.transform = "scale(1)"}
+          onMouseEnter={(e) => e.target.style.transform = "scale(1.05)"}
+          onMouseLeave={(e) => e.target.style.transform = "scale(1)"}
         >
-          📝 {stats.pendingAssignments} Tasks
+          📝 {stats.pendingAssignments ?? 0} Tasks
         </div>
-
         <div style={{
           position: "absolute",
           top: "60px",
@@ -195,12 +180,11 @@ function Dashboard() {
           cursor: "pointer",
           transition: "transform 0.2s ease"
         }}
-        onMouseEnter={(e) => e.target.style.transform = "scale(1.05)"}
-        onMouseLeave={(e) => e.target.style.transform = "scale(1)"}
+          onMouseEnter={(e) => e.target.style.transform = "scale(1.05)"}
+          onMouseLeave={(e) => e.target.style.transform = "scale(1)"}
         >
-          🎯 {stats.averageGrade}% Avg Grade
+          🎯 {stats.averageGrade ?? 0}% Avg Grade
         </div>
-
         <div style={{
           position: "absolute",
           top: "10px",
@@ -217,8 +201,8 @@ function Dashboard() {
           cursor: "pointer",
           transition: "all 0.3s ease"
         }}
-        onMouseEnter={(e) => e.target.style.transform = "scale(1.05)"}
-        onMouseLeave={(e) => e.target.style.transform = "scale(1)"}
+          onMouseEnter={(e) => e.target.style.transform = "scale(1.05)"}
+          onMouseLeave={(e) => e.target.style.transform = "scale(1)"}
         >
           {loading ? "⏳ Loading..." : "✅ Ready"}
         </div>

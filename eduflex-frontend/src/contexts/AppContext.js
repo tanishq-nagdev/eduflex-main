@@ -1,428 +1,258 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-
-export const MOCK_USERS = [
-  {
-    id: "s1",
-    email: "student@eduflex.com",
-    password: "student123",
-    role: "student",
-    name: "Aditya Choudhary",
-    year: "3rd Year, Computer Engineering",
-    studentId: "CE2022001",
-    joinDate: "2022-08-15"
-  },
-  {
-    id: "s2",
-    email: "john@eduflex.com",
-    password: "john123",
-    role: "student",
-    name: "John Doe",
-    year: "2nd Year, Computer Engineering",
-    studentId: "CE2023045",
-    joinDate: "2023-08-15"
-  },
-  {
-    id: "p1",
-    email: "prof.sharma@eduflex.com",
-    password: "prof123",
-    role: "professor",
-    name: "Prof. Sharma",
-    department: "Computer Engineering",
-    joinDate: "2021-07-01"
-  }
-];
-
-const mockCoursesData = [
-  {
-    id: 1,
-    title: "Web Development",
-    ownerId: "p1",
-    description: "Learn HTML, CSS, JavaScript, and React to build modern web apps.",
-    instructor: "Prof. Sharma",
-    instructorEmail: "sharma@eduflex.com",
-    image: "https://images.unsplash.com/photo-1523475496153-3d6cc3000f4c?auto=format&fit=crop&w=400&q=80",
-    enrolled: true,
-    progress: 75,
-    startDate: "2024-08-15",
-    endDate: "2024-12-20",
-    credits: 4,
-    enrolledStudents: ["s1", "s2"],
-    materials: [
-      { id: 1, title: "Week 1 - HTML Basics", type: "pdf", url: "#" },
-      { id: 2, title: "Week 2 - CSS Fundamentals", type: "pdf", url: "#" }
-    ],
-    quizzes: []
-  }
-];
-
-const mockAssignmentsData = [
-  {
-    id: 10,
-    title: "React Component Assignment",
-    instructions: "Build at least 5 reusable React components with props and proper documentation.",
-    course: "Web Development",
-    courseId: 1,
-    due: "2025-10-25",
-    maxScore: 100,
-    submissions: []
-  }
-];
-
-const mockGradesData = [
-  {
-    id: 1,
-    course: "Web Development",
-    courseId: 1,
-    assignment: "React Component Assignment",
-    assignmentId: 10,
-    grade: "A",
-    score: "95%",
-    studentId: "s1",
-    date: "2025-10-30"
-  }
-];
+// src/contexts/AppContext.js
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import api from '../config/api';
+import { toast } from 'react-toastify';
 
 const AppContext = createContext();
-export const useApp = () => {
-  const context = useContext(AppContext);
-  if (!context) throw new Error("useApp must be used within an AppProvider");
-  return context;
-};
+export const useApp = () => useContext(AppContext);
 
 export const AppProvider = ({ children }) => {
-  const [courses, setCourses] = useState([]);
-  const [assignments, setAssignments] = useState([]);
-  const [grades, setGrades] = useState([]);
   const [user, setUser] = useState(null);
+  const [token, setToken] = useState(localStorage.getItem('authToken'));
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      await new Promise(resolve => setTimeout(resolve, 800));
-      const storedUser = localStorage.getItem("currentUser");
-      if (storedUser) setUser(JSON.parse(storedUser));
-      setCourses(mockCoursesData);
-      setAssignments(mockAssignmentsData);
-      setGrades(mockGradesData);
+  // ------- AUTH --------
+  const loginUser = async (email, password) => {
+    setLoading(true);
+    try {
+      const { data } = await api.post('/auth/login', { email, password });
+      localStorage.setItem('authToken', data.token);
+      localStorage.setItem('currentUser', JSON.stringify(data.user));
+      setToken(data.token);
+      setUser(data.user);
+      toast.success(`Welcome back, ${data.user.name}!`);
+      return data.user;
+    } catch {
+      // Error handled globally
+      return null;
+    } finally {
       setLoading(false);
-    };
-    loadData();
+    }
+  };
+
+  const logoutUser = useCallback(() => {
+    if (window.confirm('Are you sure you want to logout?')) {
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('currentUser');
+      setToken(null);
+      setUser(null);
+      toast.info('You have been logged out.');
+    }
   }, []);
 
-  // STUDENT: Submit assignment (with file/text)
-  const submitAssignment = (assignmentId, submissionData) => {
-    setAssignments(prev =>
-      prev.map(assignment =>
-        assignment.id === assignmentId
-          ? {
-              ...assignment,
-              submissions: [
-                ...(assignment.submissions || []).filter(sub => sub.studentId !== submissionData.studentId),
-                {
-                  studentId: submissionData.studentId,
-                  status: "submitted",
-                  fileName: submissionData.fileName || null,
-                  fileUrl: submissionData.fileUrl || null,
-                  text: submissionData.text || null,
-                  graded: false,
-                  grade: null,
-                  feedback: "",
-                  submittedAt: new Date().toISOString()
-                }
-              ]
-            }
-          : assignment
-      )
-    );
-  };
-
-  // STUDENT: Edit assignment (same as submit for now)
-  const editSubmission = (assignmentId, submissionData) => {
-    submitAssignment(assignmentId, submissionData);
-  };
-
-  // PROFESSOR: Grade student submission
-  const gradeSubmission = (assignmentId, studentId, grade, feedback) => {
-    setAssignments(prev =>
-      prev.map(assignment =>
-        assignment.id === assignmentId
-          ? {
-              ...assignment,
-              submissions: (assignment.submissions || []).map(sub =>
-                sub.studentId === studentId
-                  ? { ...sub, grade, feedback, graded: true }
-                  : sub
-              )
-            }
-          : assignment
-      )
-    );
-    setGrades(prev => [
-      ...prev,
-      {
-        id: Date.now(),
-        course: assignments.find(a => a.id === assignmentId)?.course,
-        courseId: assignments.find(a => a.id === assignmentId)?.courseId,
-        assignment: assignments.find(a => a.id === assignmentId)?.title,
-        assignmentId,
-        grade: grade >= 90 ? "A" : grade >= 80 ? "B" : grade >= 70 ? "C" : "D",
-        score: `${grade}%`,
-        studentId,
-        date: new Date().toISOString().slice(0, 10)
+  // On mount: try to load user from token or fetch from /me
+  useEffect(() => {
+    const loadInitialUser = async () => {
+      setLoading(true);
+      const storedToken = localStorage.getItem('authToken');
+      const storedUser = localStorage.getItem('currentUser');
+      if (storedToken) {
+        setToken(storedToken);
+        if (storedUser) setUser(JSON.parse(storedUser));
+        else {
+          try {
+            const { data } = await api.get('/auth/me');
+            setUser(data);
+            localStorage.setItem('currentUser', JSON.stringify(data));
+          } catch {}
+        }
       }
-    ]);
-  };
-
-  // ------- PROFESSOR QUIZ FUNCTIONS --------
-  const addQuizToCourse = (courseId, quizData) => {
-    setCourses(prev =>
-      prev.map(course =>
-        course.id === courseId
-          ? {
-              ...course,
-              quizzes: [
-                ...(course.quizzes || []),
-                {
-                  id: Date.now(),
-                  title: quizData.title || "Untitled Quiz",
-                  questions: [],
-                  submissions: []
-                }
-              ]
-            }
-          : course
-      )
-    );
-  };
-
-  const addQuestionToQuiz = (courseId, quizId, questionData) => {
-    setCourses(prev =>
-      prev.map(course =>
-        course.id === courseId
-          ? {
-              ...course,
-              quizzes: course.quizzes.map(quiz =>
-                quiz.id === quizId
-                  ? {
-                      ...quiz,
-                      questions: [
-                        ...(quiz.questions || []),
-                        {
-                          id: Date.now(),
-                          text: questionData.text,
-                          options: questionData.options,
-                          correct: questionData.correct
-                        }
-                      ]
-                    }
-                  : quiz
-              )
-            }
-          : course
-      )
-    );
-  };
-
-  // Student: Submit a quiz (auto grade)
-  const submitQuiz = (courseId, quizId, studentId, answers) => {
-    setCourses(prev =>
-      prev.map(course =>
-        course.id === courseId
-          ? {
-              ...course,
-              quizzes: course.quizzes.map(quiz =>
-                quiz.id === quizId
-                  ? {
-                      ...quiz,
-                      submissions: [
-                        ...(quiz.submissions || []),
-                        {
-                          studentId,
-                          answers,
-                          submittedAt: new Date().toISOString(),
-                          score: quiz.questions
-                            ? answers.reduce(
-                                (score, ans, i) =>
-                                  ans === quiz.questions[i]?.correct
-                                    ? score + 1
-                                    : score,
-                                0
-                              )
-                            : 0,
-                          total: quiz.questions ? quiz.questions.length : 0
-                        }
-                      ]
-                    }
-                  : quiz
-              )
-            }
-          : course
-      )
-    );
-  };
-
-  // CRUD and other course/professor functions:
-  const createCourse = courseData => {
-    const newCourse = {
-      ...courseData,
-      id: Date.now(),
-      ownerId: courseData.ownerId || (user && user.id),
-      instructor: user && user.name,
-      instructorEmail: user && user.email,
-      image:
-        "https://images.unsplash.com/photo-1523475496153-3d6cc3000f4c?auto=format&fit=crop&w=400&q=80",
-      enrolled: false,
-      progress: 0,
-      credits: courseData.credits || 4,
-      startDate: "2025-01-01",
-      endDate: "2025-04-30",
-      enrolledStudents: [],
-      materials: [],
-      quizzes: []
+      setLoading(false);
     };
-    setCourses(prev => [...prev, newCourse]);
+    loadInitialUser();
+  }, []);
+
+  // ---------------------------------------
+  //            PROFESSOR FUNCTIONS
+  // ---------------------------------------
+  const getMyProfessorCourses = async () => {
+    try {
+      const { data } = await api.get('/professor/courses');
+      return data;
+    } catch {}
   };
 
-  const updateCourse = (courseId, newTitle, newDesc) => {
-    setCourses(prev =>
-      prev.map(course =>
-        course.id === courseId ? { ...course, title: newTitle, description: newDesc } : course
-      )
-    );
+  const getProfessorCourseById = async (courseId) => {
+  try {
+    const { data } = await api.get(`/professor/courses/${courseId}`);
+    return data;
+  } catch {
+    return null;
+  }
+};
+
+const getAssignmentsForCourse = async (courseId) => {
+  try {
+    const { data } = await api.get(`/professor/courses/${courseId}/assignments`);
+    return data;
+  } catch {
+    return [];
+  }
+};
+
+  const createCourse = async (courseData) => {
+    try {
+      const { data } = await api.post('/professor/courses', courseData);
+      toast.success('Course created!');
+      return data;
+    } catch {}
   };
 
-  const deleteCourse = (courseId) => {
-    setCourses(prev => prev.filter(course => course.id !== courseId));
+  const updateCourse = async (courseId, updateData) => {
+    try {
+      const { data } = await api.put(`/professor/courses/${courseId}`, updateData);
+      toast.success('Course updated!');
+      return data;
+    } catch {}
   };
 
-  const addMaterialToCourse = (courseId, material) => {
-    setCourses(prev =>
-      prev.map(course =>
-        course.id === courseId
-          ? { ...course, materials: [...(course.materials || []), { ...material, id: Date.now() }] }
-          : course
-      )
-    );
+  const deleteCourse = async (courseId) => {
+    try {
+      await api.delete(`/professor/courses/${courseId}`);
+      toast.success('Course deleted!');
+    } catch {}
   };
 
-  const addAssignmentToCourse = (courseId, assignmentData) => {
-    const course = courses.find(c => c.id === courseId);
-    if (!course) return;
-    setAssignments(prev => [
-      ...prev,
-      {
-        ...assignmentData,
-        id: Date.now(),
-        course: course.title,
-        courseId: course.id,
-        submissions: [],
-        due: assignmentData.due
-      }
-    ]);
+  const addMaterialToCourse = async (courseId, materialData) => {
+    try {
+      const { data } = await api.post(`/professor/courses/${courseId}/materials`, materialData);
+      toast.success('Material added!');
+      return data;
+    } catch {}
   };
 
-  const updateUserProfile = (newProfile) => {
-    setUser(prev => ({ ...prev, ...newProfile }));
+  const createAssignment = async (courseId, assignmentData) => {
+    try {
+      const { data } = await api.post(`/professor/courses/${courseId}/assignments`, assignmentData);
+      toast.success('Assignment created!');
+      return data;
+    } catch {}
   };
 
-  const enrollInCourse = (courseId) => {
-    setCourses(prev =>
-      prev.map(course =>
-        course.id === courseId
-          ? { ...course, enrolled: true }
-          : course
-      )
-    );
+  const getProfessorAssignments = async (courseId) => {
+    try {
+      const { data } = await api.get(`/professor/courses/${courseId}/assignments`);
+      return data;
+    } catch {}
   };
 
-  const unenrollFromCourse = (courseId) => {
-    setCourses(prev =>
-      prev.map(course =>
-        course.id === courseId
-          ? { ...course, enrolled: false }
-          : course
-      )
-    );
+  const getSubmissionsForAssignment = async (assignmentId) => {
+    try {
+      const { data } = await api.get(`/professor/assignments/${assignmentId}/submissions`);
+      return data;
+    } catch {}
   };
 
-  const updateCourseProgress = (courseId, progress) => {
-    setCourses(prev =>
-      prev.map(course =>
-        course.id === courseId
-          ? { ...course, progress }
-          : course
-      )
-    );
+  const gradeSubmission = async (assignmentId, studentId, gradeData) => {
+    try {
+      await api.patch(`/professor/assignments/${assignmentId}/grade`, { studentId, ...gradeData });
+      toast.success('Submission graded!');
+    } catch {}
   };
 
-  // Authentication
-  const loginUser = userData => {
-    setUser(userData);
-    localStorage.setItem("currentUser", JSON.stringify(userData));
+  // Quiz routes for professors (optional)
+  const addQuizToCourse = async (courseId, quizData) => {
+    try {
+      await api.post(`/professor/courses/${courseId}/quizzes`, quizData);
+      toast.success('Quiz created!');
+    } catch {}
   };
-  const logoutUser = () => {
-    setUser(null);
-    localStorage.removeItem("currentUser");
-  };
-
-  // Stats
-  const enrolledCourses = courses.filter(course => course.enrolled);
-  const pendingAssignments = assignments.filter(assignment =>
-    (assignment?.submissions || []).some(
-      sub => sub.studentId === user?.id && sub.status !== "submitted"
-    ) || (assignment?.submissions || []).length === 0 // not submitted at all
-  );
-  const recentGrades = grades.slice(0, 5);
-
-  const stats = {
-    totalCourses: enrolledCourses.length,
-    pendingAssignments: pendingAssignments.length,
-    averageGrade: grades.length > 0
-      ? (
-          grades.reduce((acc, grade) => {
-            const numGrade = parseInt(grade.score.replace('%', ''));
-            return acc + numGrade;
-          }, 0) / grades.length
-        ).toFixed(1)
-      : 0,
-    overallProgress: enrolledCourses.length > 0
-      ? Math.round(
-          enrolledCourses.reduce((acc, course) => acc + course.progress, 0) /
-            enrolledCourses.length
-        )
-      : 0
+  const addQuestionToQuiz = async (courseId, quizId, questionData) => {
+    try {
+      await api.post(`/professor/courses/${courseId}/quizzes/${quizId}/questions`, questionData);
+      toast.success('Question added!');
+    } catch {}
   };
 
+  // ---------------------------------------
+  //                 STUDENT FUNCTIONS
+  // ---------------------------------------
+  const getMyStudentCourses = async () => {
+    try {
+      const { data } = await api.get('/student/courses');
+      return data;
+    } catch {}
+  };
+
+  const getStudentAssignmentsForCourse = async (courseId) => {
+    try {
+      const { data } = await api.get(`/student/courses/${courseId}/assignments`);
+      return data;
+    } catch {}
+  };
+
+  const submitAssignment = async (assignmentId, submissionData) => {
+    try {
+      await api.post(`/student/assignments/${assignmentId}/submit`, submissionData);
+      toast.success('Assignment submitted!');
+    } catch {}
+  };
+
+  const getMyGrades = async () => {
+    try {
+      const { data } = await api.get(`/student/grades`);
+      return data;
+    } catch {}
+  };
+
+  const submitQuiz = async (courseId, quizId, answers) => {
+    try {
+      await api.post(`/student/courses/${courseId}/quizzes/${quizId}/submit`, { answers });
+      toast.success('Quiz submitted!');
+    } catch {}
+  };
+
+  // ---------------------------------------
+  //                  ADMIN  
+  // ---------------------------------------
+  const getAllUsers = async () => {
+    try {
+      const { data } = await api.get('/admin/users');
+      return data;
+    } catch {}
+  };
+
+  const createUser = async (userData) => {
+    try {
+      await api.post('/admin/users', userData);
+      toast.success('User created!');
+    } catch {}
+  };
+
+  // ---------------------------------------
+  //               PROFILE / GENERAL
+  // ---------------------------------------
+  const updateUserProfile = async (profileData) => {
+    try {
+      await api.put('/users/profile', profileData);
+      setUser(prev => ({ ...prev, ...profileData }));
+      toast.success('Profile updated!');
+    } catch {}
+  };
+
+  // ---------------------------------------
+  //           VALUE & PROVIDER
+  // ---------------------------------------
   const value = {
-    courses,
-    assignments,
-    grades,
-    user,
-    loading,
-    createCourse,
-    updateCourse,
-    deleteCourse,
-    addMaterialToCourse,
-    addAssignmentToCourse,
-    addQuizToCourse,
-    addQuestionToQuiz,
-    submitQuiz,
-    gradeSubmission,
-    submitAssignment,
-    editSubmission,
-    updateUserProfile,
-    enrollInCourse,
-    unenrollFromCourse,
-    updateCourseProgress,
-    loginUser,
-    logoutUser,
-    MOCK_USERS,
-    enrolledCourses,
-    pendingAssignments,
-    recentGrades,
-    stats,
-  };
+  user, token, loading,
+  loginUser, logoutUser,
+  // Professor
+  getMyProfessorCourses,
+  getProfessorCourseById,            // <--- add this
+  getAssignmentsForCourse,           // <--- and this, if used
+  createCourse, updateCourse, deleteCourse, addMaterialToCourse,
+  createAssignment, getProfessorAssignments,
+  getSubmissionsForAssignment, gradeSubmission,
+  addQuizToCourse, addQuestionToQuiz,
+  // Student
+  getMyStudentCourses, getStudentAssignmentsForCourse, submitAssignment,
+  getMyGrades, submitQuiz,
+  // Admin
+  getAllUsers, createUser,
+  // Profile
+  updateUserProfile,
+};
+
 
   return (
     <AppContext.Provider value={value}>
