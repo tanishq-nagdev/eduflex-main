@@ -38,4 +38,24 @@ const createUser = async (req, res) => {
   }
 };
 
-module.exports = { createUser };
+// --- ADD THIS NEW FUNCTION ---
+// @desc    Admin gets a list of all users
+// @route   GET /api/admin/users
+// @access  Private (Admin)
+const getUserList = async (req, res) => {
+  try {
+    // Fetch all users, excluding their passwords
+    const users = await User.find({}).select('-password');
+    res.json(users);
+  } catch (error) {
+    console.error('Get User List Error:', error); // Log specific error
+    res.status(500).json({ message: 'Server error fetching user list' });
+  }
+};
+// --- END OF NEW FUNCTION ---
+
+
+module.exports = {
+  createUser,
+  getUserList // <-- Make sure to export the new function
+};
