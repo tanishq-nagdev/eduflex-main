@@ -1,37 +1,30 @@
 const express = require('express');
 const dotenv = require('dotenv');
-const mongoose = require('mongoose');
+const cors = require('cors'); // You had this in package.json, let's use it
+const connectDB = require('./config/db'); // We will use this!
 
 // Load environment variables
 dotenv.config();
 
+// Connect to MongoDB
+connectDB(process.env.MONGO_URI); // Pass the URI to your function
+
 // Create Express app
 const app = express();
-app.use(express.json());
+app.use(cors()); // Enable Cross-Origin Resource Sharing
+app.use(express.json()); // Middleware to parse JSON bodies
 
-// MongoDB Connection
-mongoose.connect(process.env.MONGO_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-})
-.then(() => console.log('MongoDB Connected'))
-.catch((err) => console.error(' DB Error:', err.message));
-
-// Routes
+// --- API Routes ---
 app.use('/api/auth', require('./routes/authRoutes'));
-app.use('/api/admin', require('./routes/adminRoutes'));
-app.use('/api/professor', require('./routes/professorRoutes'));
-app.use('/api/student', require('./routes/studentRoutes'));
+app.use('/api/admin', require('./routes/admin.js')); // Use .js for clarity
+app.use('/api/professor', require('./routes/professorRoutes.js'));
+app.use('/api/student', require('./routes/studentRoutes.js'));
+app.use('/api/courses', require('./routes/courses.js'));
+app.use('/api/assignments', require('./routes/assignment.js'));
 
-// Test route to check server & DB
-app.get('/test-db', async (req, res) => {
-  try {
-    const User = require('./models/User');
-    const count = await User.countDocuments();
-    res.json({ message: 'MongoDB connected!', userCount: count });
-  } catch (error) {
-    res.status(500).json({ message: 'DB connection failed', error: error.message });
-  }
+// Test route
+app.get('/', (req, res) => {
+  res.send('EduFlex API is running...');
 });
 
 // 404 for unknown routes
@@ -41,4 +34,4 @@ app.use((req, res) => {
 
 // Start server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(` Server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
