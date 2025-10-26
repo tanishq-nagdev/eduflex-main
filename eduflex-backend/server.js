@@ -15,12 +15,12 @@ app.use(cors()); // Enable Cross-Origin Resource Sharing
 app.use(express.json()); // Middleware to parse JSON bodies
 
 // --- API Routes ---
-app.use('/api/auth', require('./routes/authRoutes'));
+app.use('/api/auth', require('./routes/authRouters'));
 app.use('/api/admin', require('./routes/admin.js')); // Use .js for clarity
 app.use('/api/professor', require('./routes/professorRoutes.js'));
 app.use('/api/student', require('./routes/studentRoutes.js'));
 app.use('/api/courses', require('./routes/courses.js'));
-app.use('/api/assignments', require('./routes/assignment.js'));
+app.use('/api/assignments', require('./routes/assignments.js'));
 
 // Test route
 app.get('/', (req, res) => {
