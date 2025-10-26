@@ -1,615 +1,262 @@
-// src/pages/Assignments.js
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useApp } from "../contexts/AppContext";
+import { toast } from "react-toastify";
 
 function Assignments() {
-  const { assignments, updateAssignmentStatus, loading } = useApp();
+  const {
+    user,
+    getMyGrades,             // API: get student's assignments + grades
+    submitAssignment,        // API: submit/turn in assignment
+  } = useApp();
+
+  const [assignments, setAssignments] = useState([]);
   const [filter, setFilter] = useState("all"); // all, pending, submitted, graded
+  const [sortBy, setSortBy] = useState("latest"); // latest, earliest, title, status
   const [selectedFile, setSelectedFile] = useState({});
   const [submissionText, setSubmissionText] = useState({});
-  
-  // New state variables for edit functionality
-  const [editMode, setEditMode] = useState({}); // Track which assignments are being edited
-  const [originalSubmissions, setOriginalSubmissions] = useState({}); // Store original submission data
+  const [loadingState, setLoadingState] = useState({ page: true, submitting: {} });
 
-  // Filter assignments
-  const filteredAssignments = assignments.filter(assignment => {
-    if (filter === "all") return true;
-    return assignment.status === filter;
-  });
+  useEffect(() => {
+    const fetchMyAssignments = async () => {
+      setLoadingState(s => ({ ...s, page: true }));
+      try {
+        const fetchedData = await getMyGrades();
+        const processed = (fetchedData || []).map(item => ({
+          ...item,
+          id: item.assignmentId || item.id,
+          title: item.assignmentTitle || item.title,
+          status: item.grade ? 'graded' : (item.submitted ? 'submitted' : 'pending'),
+          due: item.dueDate || item.due || 'N/A',
+        }));
+        setAssignments(processed);
+      } catch (error) {
+        toast.error("Failed to fetch assignments.");
+      } finally {
+        setLoadingState(s => ({ ...s, page: false }));
+      }
+    };
+    if (user) fetchMyAssignments();
+  }, [user, getMyGrades]);
 
-  // Handle file upload
+  // Sort logic
+  const sortAssignments = arr => {
+    let sorted = [...arr];
+    if (sortBy === "latest" || sortBy === "earliest") {
+      sorted.sort((a, b) => {
+        const aTime = a.due && Date.parse(a.due) ? new Date(a.due) : new Date(0);
+        const bTime = b.due && Date.parse(b.due) ? new Date(b.due) : new Date(0);
+        return sortBy === "latest"
+          ? bTime - aTime // latest first
+          : aTime - bTime;
+      });
+    } else if (sortBy === "title") {
+      sorted.sort((a, b) => (a.title || "").localeCompare(b.title || ""));
+    } else if (sortBy === "status") {
+      // Graded > Submitted > Pending
+      const order = { graded: 1, submitted: 2, pending: 3 };
+      sorted.sort((a, b) => (order[a.status] || 4) - (order[b.status] || 4));
+    }
+    return sorted;
+  };
+
+  // Filter logic
+  const filteredAssignments = sortAssignments(
+    assignments.filter(assignment => {
+      if (filter === "all") return true;
+      return assignment.status === filter;
+    })
+  );
+
+  // File and text handlers
   const handleFileChange = (assignmentId, file) => {
     setSelectedFile(prev => ({ ...prev, [assignmentId]: file }));
   };
-
-  // Handle text submission
   const handleTextChange = (assignmentId, text) => {
     setSubmissionText(prev => ({ ...prev, [assignmentId]: text }));
   };
 
-  // Enhanced submit function
-  const handleSubmit = (assignmentId) => {
-    const hasFile = selectedFile[assignmentId];
-    const hasText = submissionText[assignmentId]?.trim();
-    
-    if (hasFile || hasText) {
-      const assignment = assignments.find(a => a.id === assignmentId);
-      const now = new Date().toISOString();
-      
-      // Update assignment with submission data
-      assignment.status = 'submitted';
-      assignment.progress = 100;
-      assignment.submittedAt = now;
-      assignment.submissionData = {
-        text: submissionText[assignmentId] || "",
-        fileName: hasFile ? hasFile.name : null
-      };
-      
-      updateAssignmentStatus(assignmentId, 'submitted', 100);
-      
-      // Clear the form
+  // Submission
+  const handleSubmit = async (assignmentId) => {
+    const file = selectedFile[assignmentId];
+    const text = submissionText[assignmentId]?.trim();
+
+    if (!file && !text) {
+      toast.warning('Please add a file or text before submitting.');
+      return;
+    }
+    setLoadingState(s => ({
+      ...s,
+      submitting: { ...s.submitting, [assignmentId]: true }
+    }));
+
+    try {
+      let submissionData;
+      if (file) {
+        submissionData = new FormData();
+        submissionData.append('file', file);
+        if (text) submissionData.append('textSubmission', text);
+      } else {
+        submissionData = { submission: text };
+      }
+      await submitAssignment(assignmentId, submissionData);
+
       setSelectedFile(prev => ({ ...prev, [assignmentId]: null }));
-      setSubmissionText(prev => ({ ...prev, [assignmentId]: '' }));
-      
-      alert('Assignment submitted successfully! 🎉');
-    } else {
-      alert('Please add a file or text before submitting.');
+      setSubmissionText(prev => ({ ...prev, [assignmentId]: "" }));
+
+      setAssignments(prev =>
+        prev.map(a =>
+          a.id === assignmentId ? { ...a, status: 'submitted', submitted: true } : a
+        )
+      );
+      toast.success('Assignment submitted successfully!');
+    } catch (error) {
+      toast.error('Failed to submit assignment.');
+    } finally {
+      setLoadingState(s => ({
+        ...s,
+        submitting: { ...s.submitting, [assignmentId]: false }
+      }));
     }
   };
 
-  // New function to handle edit mode
-  const handleEditSubmission = (assignmentId) => {
-    const assignment = assignments.find(a => a.id === assignmentId);
-    
-    // Store original submission data
-    setOriginalSubmissions(prev => ({
-      ...prev,
-      [assignmentId]: { ...assignment.submissionData }
-    }));
-    
-    // Load current submission into edit form
-    setSubmissionText(prev => ({
-      ...prev,
-      [assignmentId]: assignment.submissionData.text || ''
-    }));
-    
-    // Enable edit mode
-    setEditMode(prev => ({ ...prev, [assignmentId]: true }));
-  };
-
-  // New function to save edited submission
-  const handleSaveEdit = (assignmentId) => {
-    const hasFile = selectedFile[assignmentId];
-    const hasText = submissionText[assignmentId]?.trim();
-    
-    if (hasFile || hasText) {
-      const assignment = assignments.find(a => a.id === assignmentId);
-      const now = new Date().toISOString();
-      
-      // Update with new submission data
-      assignment.lastEditedAt = now;
-      assignment.submissionData = {
-        text: submissionText[assignmentId] || "",
-        fileName: hasFile ? hasFile.name : assignment.submissionData.fileName
-      };
-      
-      // Update context
-      updateAssignmentStatus(assignmentId, 'submitted', 100);
-      
-      // Clear edit mode
-      setEditMode(prev => ({ ...prev, [assignmentId]: false }));
-      setSelectedFile(prev => ({ ...prev, [assignmentId]: null }));
-      
-      alert('Submission updated successfully! ✏️');
-    } else {
-      alert('Please add content before saving.');
-    }
-  };
-
-  // New function to cancel edit
-  const handleCancelEdit = (assignmentId) => {
-    // Restore original data
-    setSubmissionText(prev => ({
-      ...prev,
-      [assignmentId]: originalSubmissions[assignmentId]?.text || ''
-    }));
-    
-    setSelectedFile(prev => ({ ...prev, [assignmentId]: null }));
-    setEditMode(prev => ({ ...prev, [assignmentId]: false }));
-  };
-
-  // Get status color
-  const getStatusColor = (status) => {
-    switch(status) {
-      case 'pending': return '#f59e0b';
-      case 'submitted': return '#3b82f6';
-      case 'graded': return '#10b981';
-      default: return '#6b7280';
-    }
-  };
-
-  // Get status icon
-  const getStatusIcon = (status) => {
-    switch(status) {
-      case 'pending': return '⏳';
-      case 'submitted': return '📤';
-      case 'graded': return '✅';
-      default: return '📝';
-    }
-  };
-
-  if (loading) {
+  if (loadingState.page) {
     return (
-      <div style={{ padding: "2rem", marginLeft: "64px", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ textAlign: "center" }}>
-          <div style={{
-            width: "40px",
-            height: "40px",
-            border: "4px solid #f3f4f6",
-            borderTop: "4px solid #f59e0b",
-            borderRadius: "50%",
-            animation: "spin 1s linear infinite",
-            margin: "0 auto 1rem"
-          }}></div>
-          <p>Loading assignments...</p>
-          <style jsx>{`
-            @keyframes spin {
-              0% { transform: rotate(0deg); }
-              100% { transform: rotate(360deg); }
-            }
-          `}</style>
-        </div>
+      <div className="flex items-center justify-center h-96 text-lg">
+        Loading assignments...
       </div>
     );
   }
 
   return (
-    <div style={{ padding: "2rem", marginLeft: "64px", minHeight: "100vh" }}>
-      {/* Header */}
-      <h1 style={{ fontSize: "2rem", fontWeight: "bold", marginBottom: "0.5rem" }}>
-        My Assignments
-      </h1>
-      <p style={{ fontSize: "1rem", color: "#555", marginBottom: "1.5rem" }}>
-        Submit your assignments and track your progress.
-      </p>
+    <div className="p-8 pl-24 min-h-screen">
+      <h1 className="text-3xl font-bold mb-2">My Assignments</h1>
+      <p className="text-gray-600 mb-6">Submit your assignments and track your progress.</p>
 
-      {/* Stats */}
-      <div style={{ display: "flex", gap: "1rem", marginBottom: "2rem" }}>
-        <div style={{ 
-          background: "linear-gradient(135deg, #f59e0b, #d97706)", 
-          color: "white", 
-          padding: "1rem", 
-          borderRadius: "0.5rem",
-          minWidth: "120px",
-          textAlign: "center"
-        }}>
-          <div style={{ fontSize: "1.5rem", fontWeight: "bold" }}>
-            {assignments.filter(a => a.status === 'pending').length}
-          </div>
-          <div style={{ fontSize: "0.8rem", opacity: 0.9 }}>Pending</div>
-        </div>
-        
-        <div style={{ 
-          background: "linear-gradient(135deg, #3b82f6, #1d4ed8)", 
-          color: "white", 
-          padding: "1rem", 
-          borderRadius: "0.5rem",
-          minWidth: "120px",
-          textAlign: "center"
-        }}>
-          <div style={{ fontSize: "1.5rem", fontWeight: "bold" }}>
-            {assignments.filter(a => a.status === 'submitted').length}
-          </div>
-          <div style={{ fontSize: "0.8rem", opacity: 0.9 }}>Submitted</div>
-        </div>
-
-        <div style={{ 
-          background: "linear-gradient(135deg, #10b981, #059669)", 
-          color: "white", 
-          padding: "1rem", 
-          borderRadius: "0.5rem",
-          minWidth: "120px",
-          textAlign: "center"
-        }}>
-          <div style={{ fontSize: "1.5rem", fontWeight: "bold" }}>
-            {assignments.filter(a => a.status === 'graded').length}
-          </div>
-          <div style={{ fontSize: "0.8rem", opacity: 0.9 }}>Graded</div>
-        </div>
-      </div>
-
-      {/* Filter Buttons */}
-      <div style={{ display: "flex", gap: "0.5rem", marginBottom: "2rem" }}>
-        {[
-          { key: "all", label: "All Assignments", color: "#6b7280" },
-          { key: "pending", label: "Pending", color: "#f59e0b" },
-          { key: "submitted", label: "Submitted", color: "#3b82f6" },
-          { key: "graded", label: "Graded", color: "#10b981" }
-        ].map(filterOption => (
+      {/* Filters & Sorting */}
+      <div className="flex flex-wrap gap-2 mb-8 items-center">
+        {["all", "pending", "submitted", "graded"].map(opt => (
           <button
-            key={filterOption.key}
-            onClick={() => setFilter(filterOption.key)}
-            style={{
-              padding: "0.5rem 1rem",
-              borderRadius: "0.5rem",
-              border: "none",
-              fontSize: "0.9rem",
-              fontWeight: "500",
-              cursor: "pointer",
-              background: filter === filterOption.key ? filterOption.color : "#f3f4f6",
-              color: filter === filterOption.key ? "white" : "#374151",
-              transition: "all 0.2s ease"
-            }}
+            key={opt}
+            className={`px-4 py-2 rounded ${filter === opt
+              ? "bg-green-600 text-white"
+              : "bg-gray-200 text-gray-800"}`}
+            onClick={() => setFilter(opt)}
           >
-            {filterOption.label}
+            {opt.charAt(0).toUpperCase() + opt.slice(1)}
           </button>
         ))}
+        <span className="ml-3 font-medium">Sort by:</span>
+        <select
+          value={sortBy}
+          onChange={e => setSortBy(e.target.value)}
+          className="ml-1 px-3 py-1 rounded border border-gray-300"
+        >
+          <option value="latest">Latest Deadline</option>
+          <option value="earliest">Earliest Deadline</option>
+          <option value="title">Title (A-Z)</option>
+          <option value="status">Status</option>
+        </select>
       </div>
 
       {/* Assignments List */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+      <div className="space-y-6">
         {filteredAssignments.length > 0 ? (
-          filteredAssignments.map((assignment) => (
+          filteredAssignments.map(assignment => (
             <div
               key={assignment.id}
-              style={{
-                background: "white",
-                padding: "1.5rem",
-                borderRadius: "0.75rem",
-                boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
-                border: `2px solid ${getStatusColor(assignment.status)}20`
-              }}
+              className={`bg-white p-6 rounded-lg shadow-md border-l-4
+                ${assignment.status === 'graded' ? 'border-green-500' :
+                  assignment.status === 'submitted' ? 'border-blue-500' : 'border-yellow-500'}`}
             >
               {/* Assignment Header */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1rem" }}>
+              <div className="flex flex-wrap justify-between items-start mb-4 gap-4">
                 <div>
-                  <h3 style={{ fontSize: "1.25rem", fontWeight: "600", marginBottom: "0.5rem" }}>
-                    {assignment.title}
-                  </h3>
-                  <p style={{ color: "#666", marginBottom: "0.5rem" }}>
-                    <strong>Course:</strong> {assignment.course}
+                  <h3 className="text-xl font-semibold mb-1">{assignment.title}</h3>
+                  <p className="text-gray-500 mb-1">
+                    <strong>Course:</strong> {assignment.course || 'N/A'}
                   </p>
-                  <p style={{ color: "#666", fontSize: "0.9rem" }}>
-                    <strong>Due Date:</strong> {new Date(assignment.due).toLocaleDateString()}
+                  <p className="text-sm text-gray-500">
+                    <strong>Due:</strong> {assignment.due ? new Date(assignment.due).toLocaleDateString() : 'N/A'}
                   </p>
                 </div>
-                
-                <div style={{ textAlign: "right" }}>
-                  <div style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "0.5rem",
-                    padding: "0.5rem 1rem",
-                    borderRadius: "1rem",
-                    background: getStatusColor(assignment.status),
-                    color: "white",
-                    fontSize: "0.9rem",
-                    fontWeight: "500"
-                  }}>
-                    {getStatusIcon(assignment.status)} {assignment.status.toUpperCase()}
-                  </div>
-                  
+                <div className="text-right">
+                  <span className={`px-3 py-1 rounded-full text-sm font-medium text-white
+                    ${assignment.status === 'graded' ? 'bg-green-500' :
+                      assignment.status === 'submitted' ? 'bg-blue-500' : 'bg-yellow-500'}`}>
+                    {assignment.status.toUpperCase()}
+                  </span>
                   {assignment.status === 'graded' && assignment.grade && (
-                    <div style={{ marginTop: "0.5rem", fontSize: "1.1rem", fontWeight: "bold", color: "#10b981" }}>
+                    <div className="mt-2 text-lg font-bold text-green-600">
                       Grade: {assignment.grade}
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* Progress Bar */}
-              <div style={{ marginBottom: "1rem" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
-                  <span style={{ fontSize: "0.9rem", color: "#666" }}>Progress</span>
-                  <span style={{ fontSize: "0.9rem", fontWeight: "500" }}>{assignment.progress}%</span>
-                </div>
-                <div style={{
-                  width: "100%",
-                  height: "6px",
-                  backgroundColor: "#e5e7eb",
-                  borderRadius: "3px",
-                  overflow: "hidden"
-                }}>
-                  <div style={{
-                    width: `${assignment.progress}%`,
-                    height: "100%",
-                    backgroundColor: getStatusColor(assignment.status),
-                    transition: "width 0.3s ease"
-                  }} />
-                </div>
-              </div>
-
-              {/* Submission Form for Pending Assignments */}
+              {/* Submission form for pending assignments */}
               {assignment.status === 'pending' && (
-                <div style={{ 
-                  background: "#f9fafb", 
-                  padding: "1.5rem", 
-                  borderRadius: "0.5rem",
-                  border: "1px solid #e5e7eb"
-                }}>
-                  <h4 style={{ marginBottom: "1rem", color: "#374151" }}>Submit Assignment</h4>
-                  
-                  {/* File Upload */}
-                  <div style={{ marginBottom: "1rem" }}>
-                    <label style={{ display: "block", marginBottom: "0.5rem", fontSize: "0.9rem", fontWeight: "500" }}>
-                      Upload File (Optional)
+                <div className="bg-gray-50 p-4 rounded border border-gray-200 mt-4">
+                  <h4 className="font-semibold mb-3 text-gray-700">Submit Assignment</h4>
+                  <div className="mb-4">
+                    <label className="block mb-1 text-sm font-medium text-gray-600">
+                      Upload File (optional)
                     </label>
                     <input
                       type="file"
-                      onChange={(e) => handleFileChange(assignment.id, e.target.files[0])}
-                      style={{
-                        width: "100%",
-                        padding: "0.5rem",
-                        border: "1px solid #d1d5db",
-                        borderRadius: "0.375rem",
-                        background: "white"
-                      }}
+                      onChange={e => handleFileChange(assignment.id, e.target.files[0])}
+                      className="block w-full text-sm text-gray-500"
                       accept=".pdf,.doc,.docx,.txt,.zip"
+                      disabled={!!loadingState.submitting[assignment.id]}
                     />
                     {selectedFile[assignment.id] && (
-                      <p style={{ fontSize: "0.8rem", color: "#10b981", marginTop: "0.5rem" }}>
-                        ✓ Selected: {selectedFile[assignment.id].name}
-                      </p>
+                      <div className="mt-2 text-xs text-gray-700">
+                        {selectedFile[assignment.id].name}
+                        <button
+                          type="button"
+                          className="ml-3 text-red-600 text-xs"
+                          onClick={() => handleFileChange(assignment.id, null)}
+                        >Remove</button>
+                      </div>
                     )}
                   </div>
-
-                  {/* Text Submission */}
-                  <div style={{ marginBottom: "1rem" }}>
-                    <label style={{ display: "block", marginBottom: "0.5rem", fontSize: "0.9rem", fontWeight: "500" }}>
-                      Text Submission (Optional)
+                  <div className="mb-4">
+                    <label className="block mb-1 text-sm font-medium text-gray-600">
+                      Text Submission (optional)
                     </label>
                     <textarea
                       value={submissionText[assignment.id] || ''}
-                      onChange={(e) => handleTextChange(assignment.id, e.target.value)}
+                      onChange={e => handleTextChange(assignment.id, e.target.value)}
                       placeholder="Write your submission here..."
                       rows={4}
-                      style={{
-                        width: "100%",
-                        padding: "0.75rem",
-                        border: "1px solid #d1d5db",
-                        borderRadius: "0.375rem",
-                        resize: "vertical",
-                        fontFamily: "inherit"
-                      }}
+                      className="block w-full p-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 resize-vertical disabled:bg-gray-100"
+                      disabled={!!loadingState.submitting[assignment.id]}
                     />
                   </div>
-
-                  {/* Submit Button */}
                   <button
                     onClick={() => handleSubmit(assignment.id)}
-                    style={{
-                      padding: "0.75rem 1.5rem",
-                      background: "#10b981",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "0.5rem",
-                      fontSize: "0.9rem",
-                      fontWeight: "600",
-                      cursor: "pointer",
-                      transition: "background 0.2s"
-                    }}
-                    onMouseEnter={(e) => e.target.style.background = "#059669"}
-                    onMouseLeave={(e) => e.target.style.background = "#10b981"}
+                    disabled={!!loadingState.submitting[assignment.id]}
+                    className="px-5 py-2 bg-green-600 text-white rounded-md font-semibold hover:bg-green-700 transition duration-200 disabled:opacity-50"
                   >
-                    Submit Assignment 📤
+                    {loadingState.submitting[assignment.id] ? 'Submitting...' : 'Submit'}
                   </button>
                 </div>
               )}
 
-              {/* Enhanced Submission Status for Submitted/Graded */}
+              {/* If submitted/graded, show summary */}
               {(assignment.status === 'submitted' || assignment.status === 'graded') && (
-                <div style={{
-                  background: assignment.status === 'graded' ? "#f0fdf4" : "#eff6ff",
-                  padding: "1.5rem",
-                  borderRadius: "0.5rem",
-                  border: `1px solid ${assignment.status === 'graded' ? '#bbf7d0' : '#bfdbfe'}`
-                }}>
-                  {/* Submission Info */}
-                  <div style={{ marginBottom: "1rem" }}>
-                    <p style={{ 
-                      margin: "0 0 0.5rem 0", 
-                      color: assignment.status === 'graded' ? "#059669" : "#1d4ed8",
-                      fontWeight: "600",
-                      fontSize: "1rem"
-                    }}>
-                      {assignment.status === 'graded' 
-                        ? `✅ Assignment Graded! Score: ${assignment.grade || 'Pending'}` 
-                        : "📤 Assignment Submitted Successfully!"}
-                    </p>
-                    
-                    {/* Submission Timeline */}
-                    <div style={{ fontSize: "0.85rem", color: "#666", lineHeight: "1.4" }}>
-                      <p style={{ margin: "0.25rem 0" }}>
-                        <strong>📅 Original Submission:</strong> {' '}
-                        {assignment.submittedAt ? new Date(assignment.submittedAt).toLocaleString() : 'Not recorded'}
-                      </p>
-                      {assignment.lastEditedAt && (
-                        <p style={{ margin: "0.25rem 0", color: "#f59e0b", fontWeight: "500" }}>
-                          <strong>✏️ Last Edited:</strong> {' '}
-                          {new Date(assignment.lastEditedAt).toLocaleString()}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Current Submission Content */}
-                  {assignment.submissionData && (
-                    <div style={{ 
-                      background: "white", 
-                      padding: "1rem", 
-                      borderRadius: "0.375rem",
-                      border: "1px solid #e5e7eb",
-                      marginBottom: "1rem"
-                    }}>
-                      <h5 style={{ margin: "0 0 0.75rem 0", color: "#374151" }}>Current Submission:</h5>
-                      
-                      {assignment.submissionData.fileName && (
-                        <p style={{ margin: "0.5rem 0", fontSize: "0.9rem" }}>
-                          📎 <strong>File:</strong> {assignment.submissionData.fileName}
-                        </p>
-                      )}
-                      
-                      {assignment.submissionData.text && (
-                        <div>
-                          <p style={{ margin: "0.5rem 0 0.25rem 0", fontSize: "0.9rem", fontWeight: "500" }}>📝 Text Submission:</p>
-                          <p style={{ 
-                            margin: "0", 
-                            padding: "0.75rem", 
-                            background: "#f9fafb", 
-                            borderRadius: "0.25rem",
-                            fontSize: "0.85rem",
-                            fontStyle: "italic",
-                            border: "1px solid #f3f4f6"
-                          }}>
-                            {assignment.submissionData.text}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Edit Submission Section */}
-                  {assignment.status === 'submitted' && (
-                    <div>
-                      {!editMode[assignment.id] ? (
-                        // Show Edit Button
-                        <button
-                          onClick={() => handleEditSubmission(assignment.id)}
-                          style={{
-                            padding: "0.75rem 1.5rem",
-                            background: "#f59e0b",
-                            color: "white",
-                            border: "none",
-                            borderRadius: "0.5rem",
-                            fontSize: "0.9rem",
-                            fontWeight: "500",
-                            cursor: "pointer",
-                            transition: "background 0.2s"
-                          }}
-                          onMouseEnter={(e) => e.target.style.background = "#d97706"}
-                          onMouseLeave={(e) => e.target.style.background = "#f59e0b"}
-                        >
-                          ✏️ Edit Submission
-                        </button>
-                      ) : (
-                        // Show Edit Form
-                        <div style={{ 
-                          background: "#fff7ed", 
-                          padding: "1.5rem", 
-                          borderRadius: "0.5rem",
-                          border: "2px solid #fed7aa" 
-                        }}>
-                          <h5 style={{ margin: "0 0 1rem 0", color: "#ea580c" }}>✏️ Edit Your Submission</h5>
-                          
-                          {/* File Upload for Edit */}
-                          <div style={{ marginBottom: "1rem" }}>
-                            <label style={{ display: "block", marginBottom: "0.5rem", fontSize: "0.9rem", fontWeight: "500" }}>
-                              Update File (Optional)
-                            </label>
-                            <input
-                              type="file"
-                              onChange={(e) => handleFileChange(assignment.id, e.target.files[0])}
-                              style={{
-                                width: "100%",
-                                padding: "0.5rem",
-                                border: "1px solid #fed7aa",
-                                borderRadius: "0.375rem",
-                                background: "white"
-                              }}
-                              accept=".pdf,.doc,.docx,.txt,.zip"
-                            />
-                            {selectedFile[assignment.id] && (
-                              <p style={{ fontSize: "0.8rem", color: "#ea580c", marginTop: "0.5rem" }}>
-                                ✓ New file selected: {selectedFile[assignment.id].name}
-                              </p>
-                            )}
-                          </div>
-
-                          {/* Text Edit */}
-                          <div style={{ marginBottom: "1rem" }}>
-                            <label style={{ display: "block", marginBottom: "0.5rem", fontSize: "0.9rem", fontWeight: "500" }}>
-                              Update Text Submission
-                            </label>
-                            <textarea
-                              value={submissionText[assignment.id] || ''}
-                              onChange={(e) => handleTextChange(assignment.id, e.target.value)}
-                              placeholder="Update your submission text..."
-                              rows={4}
-                              style={{
-                                width: "100%",
-                                padding: "0.75rem",
-                                border: "1px solid #fed7aa",
-                                borderRadius: "0.375rem",
-                                resize: "vertical",
-                                fontFamily: "inherit"
-                              }}
-                            />
-                          </div>
-
-                          {/* Edit Action Buttons */}
-                          <div style={{ display: "flex", gap: "0.75rem" }}>
-                            <button
-                              onClick={() => handleSaveEdit(assignment.id)}
-                              style={{
-                                padding: "0.75rem 1.5rem",
-                                background: "#10b981",
-                                color: "white",
-                                border: "none",
-                                borderRadius: "0.5rem",
-                                fontSize: "0.9rem",
-                                fontWeight: "600",
-                                cursor: "pointer",
-                                transition: "background 0.2s"
-                              }}
-                              onMouseEnter={(e) => e.target.style.background = "#059669"}
-                              onMouseLeave={(e) => e.target.style.background = "#10b981"}
-                            >
-                              💾 Save Changes
-                            </button>
-
-                            <button
-                              onClick={() => handleCancelEdit(assignment.id)}
-                              style={{
-                                padding: "0.75rem 1.5rem",
-                                background: "#6b7280",
-                                color: "white",
-                                border: "none",
-                                borderRadius: "0.5rem",
-                                fontSize: "0.9rem",
-                                fontWeight: "500",
-                                cursor: "pointer",
-                                transition: "background 0.2s"
-                              }}
-                              onMouseEnter={(e) => e.target.style.background = "#4b5563"}
-                              onMouseLeave={(e) => e.target.style.background = "#6b7280"}
-                            >
-                              ❌ Cancel
-                            </button>
-                          </div>
-
-                          <p style={{ 
-                            margin: "1rem 0 0 0", 
-                            fontSize: "0.8rem", 
-                            color: "#dc2626",
-                            fontStyle: "italic"
-                          }}>
-                            ⚠️ Note: Editing will update your submission timestamp
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                <div className={`mt-4 p-4 rounded border
+                  ${assignment.status === 'graded' ? 'bg-green-50 border-green-200' : 'bg-blue-50 border-blue-200'}`}>
+                  <h4 className="font-semibold mb-2 text-gray-700">Your Submission:</h4>
+                  <p className="text-sm text-gray-600">
+                    {/* Display text/file from real backend data here */}
+                    Submission summary (from backend) appears here.
+                  </p>
                 </div>
               )}
             </div>
           ))
         ) : (
-          <div style={{ textAlign: "center", padding: "3rem", color: "#666" }}>
-            <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>📝</div>
-            <h3>No assignments found</h3>
-            <p>No assignments match your current filter.</p>
-          </div>
+          <p className="text-gray-500 text-center col-span-full">No assignments found for this filter.</p>
         )}
       </div>
     </div>
