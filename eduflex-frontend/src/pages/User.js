@@ -5,7 +5,7 @@ import { useApp } from "../contexts/AppContext";
 import profilePic from "../assets/Profile.jpg";
 
 function User() {
-  const { courses, assignments, grades, loading } = useApp();
+  const { courses, assignments, grades, loading, user: loggedInUser } = useApp();
   const [activeTab, setActiveTab] = useState("overview"); // overview, progress, achievements, settings
 
   // Real user statistics from global state
@@ -23,14 +23,14 @@ function User() {
       Math.round(courses.filter(c => c.enrolled).reduce((acc, course) => acc + course.progress, 0) / courses.filter(c => c.enrolled).length) : 0
   };
 
-  // Real user data
+  // Use logged-in user data from context
   const user = {
-    name: "Aditya Choudhary",
-    year: "3rd Year, Computer Engineering",
-    email: "aditya@eduflex.com",
-    studentId: "CE2022001",
+    name: loggedInUser?.name || "Student",
+    year: loggedInUser?.year || "N/A",
+    email: loggedInUser?.email || "student@eduflex.com",
+    studentId: loggedInUser?.studentId || "N/A",
     profilePic: profilePic,
-    joinDate: "2022-08-15"
+    joinDate: loggedInUser?.joinDate || "2022-08-15"
   };
 
   // Real progress data for pie chart
@@ -100,7 +100,7 @@ function User() {
 
   if (loading) {
     return (
-      <div style={{ padding: "2rem", marginLeft: "5rem", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ padding: "2rem", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div style={{ textAlign: "center" }}>
           <div style={{
             width: "40px",
@@ -124,7 +124,7 @@ function User() {
   }
 
   return (
-    <div style={{ padding: "2rem", marginLeft: "5rem" }}>
+    <div style={{ padding: "2rem" }}>
       <h1 style={{ fontSize: "2rem", fontWeight: "bold", marginBottom: "2rem" }}>
         User Profile
       </h1>
@@ -140,6 +140,8 @@ function User() {
           padding: "2rem",
           borderRadius: "1rem",
           boxShadow: "0 8px 20px rgba(40,167,69,0.3)",
+          flexWrap: "wrap",
+          gap: "1rem"
         }}
       >
         <img
@@ -149,12 +151,11 @@ function User() {
             width: "120px",
             height: "120px",
             borderRadius: "50%",
-            marginRight: "2rem",
             border: "4px solid white",
             objectFit: "cover"
           }}
         />
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, minWidth: "250px" }}>
           <h2 style={{ fontSize: "1.8rem", fontWeight: "600", marginBottom: "0.5rem" }}>
             {user.name}
           </h2>
@@ -191,7 +192,9 @@ function User() {
         display: "flex", 
         gap: "0.5rem", 
         marginBottom: "2rem",
-        borderBottom: "2px solid #f3f4f6"
+        borderBottom: "2px solid #f3f4f6",
+        flexWrap: "wrap",
+        overflowX: "auto"
       }}>
         {[
           { key: "overview", label: "Overview", icon: "📊" },
@@ -211,7 +214,8 @@ function User() {
               fontSize: "0.9rem",
               fontWeight: "500",
               cursor: "pointer",
-              transition: "all 0.2s"
+              transition: "all 0.2s",
+              whiteSpace: "nowrap"
             }}
           >
             {tab.icon} {tab.label}
@@ -285,7 +289,7 @@ function User() {
                 </div>
               ) : (
                 <div style={{ maxHeight: "200px", overflowY: "auto" }}>
-                  {pendingAssignmentsList.map((assignment, index) => (
+                  {pendingAssignmentsList.map((assignment) => (
                     <div
                       key={assignment.id}
                       style={{
@@ -297,7 +301,7 @@ function User() {
                         borderLeft: "4px solid #ffc107"
                       }}
                     >
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.5rem" }}>
                         <div>
                           <strong style={{ color: "#856404" }}>{assignment.title}</strong>
                           <p style={{ margin: "0.25rem 0", color: "#856404", fontSize: "0.9rem" }}>
@@ -338,7 +342,7 @@ function User() {
               Enrolled Courses ({userStats.totalCourses})
             </h3>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "1rem" }}>
-              {courses.filter(c => c.enrolled).map((course, index) => (
+              {courses.filter(c => c.enrolled).map((course) => (
                 <div
                   key={course.id}
                   style={{
@@ -399,7 +403,7 @@ function User() {
           {/* Course Progress Bar Chart */}
           <div style={{
             flex: 1,
-            minWidth: "400px",
+            minWidth: "300px",
             background: "#fff",
             padding: "1.5rem",
             borderRadius: "1rem",
@@ -452,7 +456,7 @@ function User() {
 
       {/* Achievements Tab */}
       {activeTab === "achievements" && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "1rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: "1rem" }}>
           {achievements.map(achievement => (
             <div
               key={achievement.id}
@@ -553,15 +557,15 @@ function User() {
             <div>
               <h4 style={{ marginBottom: "1rem", color: "#17a2b8" }}>Notifications</h4>
               <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                <label style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
                   <input type="checkbox" defaultChecked />
                   <span>Assignment due date reminders</span>
                 </label>
-                <label style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
                   <input type="checkbox" defaultChecked />
                   <span>Grade notifications</span>
                 </label>
-                <label style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
                   <input type="checkbox" />
                   <span>Course announcements</span>
                 </label>

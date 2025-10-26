@@ -1,9 +1,10 @@
 // src/pages/Assignments.js
 import React, { useState } from "react";
 import { useApp } from "../contexts/AppContext";
+import { toast } from 'react-toastify';
 
 function Assignments() {
-  const { assignments, updateAssignmentStatus, loading } = useApp();
+  const { assignments, submitAssignment, editSubmission, loading } = useApp();
   const [filter, setFilter] = useState("all"); // all, pending, submitted, graded
   const [selectedFile, setSelectedFile] = useState({});
   const [submissionText, setSubmissionText] = useState({});
@@ -28,37 +29,31 @@ function Assignments() {
     setSubmissionText(prev => ({ ...prev, [assignmentId]: text }));
   };
 
-  // Enhanced submit function
+  // Enhanced submit function with toast
   const handleSubmit = (assignmentId) => {
     const hasFile = selectedFile[assignmentId];
     const hasText = submissionText[assignmentId]?.trim();
     
-    if (hasFile || hasText) {
-      const assignment = assignments.find(a => a.id === assignmentId);
-      const now = new Date().toISOString();
-      
-      // Update assignment with submission data
-      assignment.status = 'submitted';
-      assignment.progress = 100;
-      assignment.submittedAt = now;
-      assignment.submissionData = {
-        text: submissionText[assignmentId] || "",
-        fileName: hasFile ? hasFile.name : null
-      };
-      
-      updateAssignmentStatus(assignmentId, 'submitted', 100);
-      
-      // Clear the form
-      setSelectedFile(prev => ({ ...prev, [assignmentId]: null }));
-      setSubmissionText(prev => ({ ...prev, [assignmentId]: '' }));
-      
-      alert('Assignment submitted successfully! 🎉');
-    } else {
-      alert('Please add a file or text before submitting.');
+    if (!hasFile && !hasText) {
+      toast.warning('Please add a file or text before submitting.');
+      return;
     }
+
+    const submissionData = {
+      text: submissionText[assignmentId] || "",
+      fileName: hasFile ? hasFile.name : null
+    };
+
+    submitAssignment(assignmentId, submissionData);
+    
+    // Clear the form
+    setSelectedFile(prev => ({ ...prev, [assignmentId]: null }));
+    setSubmissionText(prev => ({ ...prev, [assignmentId]: '' }));
+    
+    toast.success('Assignment submitted successfully! 🎉');
   };
 
-  // New function to handle edit mode
+  // Function to handle edit mode
   const handleEditSubmission = (assignmentId) => {
     const assignment = assignments.find(a => a.id === assignmentId);
     
@@ -78,36 +73,31 @@ function Assignments() {
     setEditMode(prev => ({ ...prev, [assignmentId]: true }));
   };
 
-  // New function to save edited submission
+  // Function to save edited submission with toast
   const handleSaveEdit = (assignmentId) => {
     const hasFile = selectedFile[assignmentId];
     const hasText = submissionText[assignmentId]?.trim();
     
-    if (hasFile || hasText) {
-      const assignment = assignments.find(a => a.id === assignmentId);
-      const now = new Date().toISOString();
-      
-      // Update with new submission data
-      assignment.lastEditedAt = now;
-      assignment.submissionData = {
-        text: submissionText[assignmentId] || "",
-        fileName: hasFile ? hasFile.name : assignment.submissionData.fileName
-      };
-      
-      // Update context
-      updateAssignmentStatus(assignmentId, 'submitted', 100);
-      
-      // Clear edit mode
-      setEditMode(prev => ({ ...prev, [assignmentId]: false }));
-      setSelectedFile(prev => ({ ...prev, [assignmentId]: null }));
-      
-      alert('Submission updated successfully! ✏️');
-    } else {
-      alert('Please add content before saving.');
+    if (!hasFile && !hasText) {
+      toast.warning('Please add content before saving.');
+      return;
     }
+
+    const submissionData = {
+      text: submissionText[assignmentId] || "",
+      fileName: hasFile ? hasFile.name : null
+    };
+
+    editSubmission(assignmentId, submissionData);
+    
+    // Clear edit mode
+    setEditMode(prev => ({ ...prev, [assignmentId]: false }));
+    setSelectedFile(prev => ({ ...prev, [assignmentId]: null }));
+    
+    toast.success('Submission updated successfully! ✏️');
   };
 
-  // New function to cancel edit
+  // Function to cancel edit
   const handleCancelEdit = (assignmentId) => {
     // Restore original data
     setSubmissionText(prev => ({
@@ -117,6 +107,8 @@ function Assignments() {
     
     setSelectedFile(prev => ({ ...prev, [assignmentId]: null }));
     setEditMode(prev => ({ ...prev, [assignmentId]: false }));
+    
+    toast.info('Edit cancelled');
   };
 
   // Get status color
@@ -141,7 +133,7 @@ function Assignments() {
 
   if (loading) {
     return (
-      <div style={{ padding: "2rem", marginLeft: "64px", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ padding: "2rem", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div style={{ textAlign: "center" }}>
           <div style={{
             width: "40px",
@@ -165,7 +157,7 @@ function Assignments() {
   }
 
   return (
-    <div style={{ padding: "2rem", marginLeft: "64px", minHeight: "100vh" }}>
+    <div style={{ padding: "2rem", minHeight: "100vh" }}>
       {/* Header */}
       <h1 style={{ fontSize: "2rem", fontWeight: "bold", marginBottom: "0.5rem" }}>
         My Assignments
@@ -175,7 +167,7 @@ function Assignments() {
       </p>
 
       {/* Stats */}
-      <div style={{ display: "flex", gap: "1rem", marginBottom: "2rem" }}>
+      <div style={{ display: "flex", gap: "1rem", marginBottom: "2rem", flexWrap: "wrap" }}>
         <div style={{ 
           background: "linear-gradient(135deg, #f59e0b, #d97706)", 
           color: "white", 
@@ -220,7 +212,7 @@ function Assignments() {
       </div>
 
       {/* Filter Buttons */}
-      <div style={{ display: "flex", gap: "0.5rem", marginBottom: "2rem" }}>
+      <div style={{ display: "flex", gap: "0.5rem", marginBottom: "2rem", flexWrap: "wrap" }}>
         {[
           { key: "all", label: "All Assignments", color: "#6b7280" },
           { key: "pending", label: "Pending", color: "#f59e0b" },
@@ -262,7 +254,7 @@ function Assignments() {
               }}
             >
               {/* Assignment Header */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1rem" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1rem", flexWrap: "wrap", gap: "1rem" }}>
                 <div>
                   <h3 style={{ fontSize: "1.25rem", fontWeight: "600", marginBottom: "0.5rem" }}>
                     {assignment.title}
@@ -548,7 +540,7 @@ function Assignments() {
                           </div>
 
                           {/* Edit Action Buttons */}
-                          <div style={{ display: "flex", gap: "0.75rem" }}>
+                          <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
                             <button
                               onClick={() => handleSaveEdit(assignment.id)}
                               style={{
