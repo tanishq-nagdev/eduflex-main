@@ -19,7 +19,7 @@ router.use(authenticate);
 router.post('/', authorize('teacher','admin'), createCourse);
 
 // Get All Courses (any logged-in user)
-router.get('/', getAllCourses);
+router.get('/', authorize('admin','student'),getAllCourses);
 
 // --- ADD THESE TWO LINES ---
 // Update Course (teacher who owns it, or admin)

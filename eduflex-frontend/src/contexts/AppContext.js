@@ -118,7 +118,7 @@ export const AppProvider = ({ children }) => {
   }, []); // Run only once on mount
 
     // --- Placeholder API Call Functions --- (Keep these as placeholders for now)
-    const fetchAllCourses = useCallback(async () => { console.warn("API: fetchAllCourses not implemented"); return []; }, []);
+    const getAllCourses = useCallback(async () => { console.warn("API: fetchAllCourses not implemented"); return []; }, []);
     const fetchMyStudentCourses = useCallback(async () => { console.warn("API: fetchMyStudentCourses not implemented"); return []; }, []);
     const fetchMyProfessorCourses = useCallback(async () => { console.warn("API: fetchMyProfessorCourses not implemented"); return []; }, []);
     const fetchMyGrades = useCallback(async () => { console.warn("API: fetchMyGrades not implemented"); return []; }, []);
@@ -129,7 +129,7 @@ export const AppProvider = ({ children }) => {
     const createAssignment = async (assignmentData) => { console.warn("API: createAssignment not implemented"); throw new Error("Not implemented"); };
     const submitAssignment = async (assignmentId, submissionText) => { console.warn("API: submitAssignment not implemented"); throw new Error("Not implemented"); };
     const gradeSubmission = async (assignmentId, studentId, grade, feedback) => { console.warn("API: gradeSubmission not implemented"); throw new Error("Not implemented"); };
-    const fetchAllUsersAdmin = useCallback(async () => { console.warn("API: fetchAllUsersAdmin not implemented"); return []; }, []);
+    const getAllUsers = useCallback(async () => { console.warn("API: fetchAllUsersAdmin not implemented"); return []; }, []);
     const createUser = async (userData) => { console.warn("API: createUser not implemented"); throw new Error("Not implemented"); };
     const updateUserProfile = async (profileData) => { console.warn("API: updateUserProfile not implemented"); throw new Error("Not implemented"); };
 
@@ -145,10 +145,10 @@ export const AppProvider = ({ children }) => {
 
     // Include placeholders for now
     allCourses, myCourses, myAssignments, allUsers,
-    fetchAllCourses, fetchMyStudentCourses, fetchMyProfessorCourses,
+    getAllCourses, fetchMyStudentCourses, fetchMyProfessorCourses,
     fetchMyGrades, fetchProfessorAssignments, createCourse, updateCourse,
     deleteCourse, createAssignment, submitAssignment, gradeSubmission,
-    fetchAllUsersAdmin, createUser, updateUserProfile,
+    getAllUsers, createUser, updateUserProfile,
   };
 
   // Render provider - show global loading only during initial auth check

@@ -11,7 +11,12 @@ connectDB(process.env.MONGO_URI); // Pass the URI to your function
 
 // Create Express app
 const app = express();
-app.use(cors()); // Enable Cross-Origin Resource Sharing
+app.use(cors({
+  origin: "http://localhost:3000",
+  methods: ["GET","POST","PUT","DELETE"],
+  credentials: true
+}));
+
 app.use(express.json()); // Middleware to parse JSON bodies
 
 // --- API Routes ---

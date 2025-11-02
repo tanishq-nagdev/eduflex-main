@@ -27,6 +27,11 @@ router.get('/courses/:id/students',  getStudentsInCourseHandler);
 
 // Teacher - Grade assignment submission
 router.patch('/assignments/:id/grade',  gradeSubmissionHandler);
+// Teacher - Grade assignment submission
+router.patch('/assignments/:id',  gradeSubmissionHandler);
+
+//update Assignment
+// router.put('/assignments/:id', )
 
 
 module.exports = router;

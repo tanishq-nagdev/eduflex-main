@@ -10,16 +10,7 @@ const getMyCoursesHandler=async (req, res) => {
         res.status(500).json({ message: 'Server error' });
     }
 }
-// Create course
-const createCourseHandler = async (req, res) => {
-  const { title, description } = req.body;
-  const course = await Course.create({
-    title,
-    description,
-    professor: req.user._id
-  });
-  res.status(201).json(course);
-};
+
 
 // Create assignment
 const createAssignmentHandler = async (req, res) => {
