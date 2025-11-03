@@ -1,0 +1,7 @@
+# Ignore node_modules in all sub-projects
+/eduflex-backend/node_modules
+/eduflexLMS/node_modules
+
+# Ignore .env files
+/eduflex-backend/.env
+/eduflexLMS/.env.local
