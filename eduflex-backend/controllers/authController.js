@@ -4,9 +4,21 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const User = require('../models/User');
 const { generateToken } = require('../utils/generateToken'); // Use the generateToken util
+const nodemailer = require('nodemailer');
+
+
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret';
 // const JWT_EXPIRES = '1d'; // Defined in generateToken now
+
+const transporter = nodemailer.createTransport({
+  host: process.env.EMAIL_HOST,
+  port: process.env.EMAIL_PORT,
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
 
 // Function to handle login
 const login = async (req, res) => {
@@ -64,15 +76,31 @@ const forgotPassword = async (req, res) => {
     // Hash token and set expiry (store hashed token in DB for security)
     // NOTE: For simplicity here, we store the plain token, but hashing is recommended
     user.resetPasswordToken = resetToken;
-    user.resetPasswordExpires = Date.now() + 3600000; // 1 hour validity
+    user.resetPasswordExpires = Date.now() + 15 * 60 * 1000; // 15 minutes validity
 
     await user.save();
 
     // TODO: Send email with reset link/token in production
     // Example: sendEmail(user.email, 'Password Reset', `Your token: ${resetToken}`);
+    const resetUrl = `${process.env.CLIENT_URL}/reset-password/${resetToken}`;
+
+    await transporter.sendMail({
+      from: process.env.EMAIL_FROM,
+      to: email,
+      subject: 'Password Reset Request',
+      html: `
+        <p>Hello ${user.name || 'User'},</p>
+        <p>You requested a password reset for your account.</p>
+        <p>Click below to reset your password:</p>
+        <a href="${resetUrl}">${resetUrl}</a>
+        <p>This link will expire in 1 hour.</p>
+      `,
+    });
 
     console.log(`Password reset token for ${email}: ${resetToken}`); // Log for dev/testing
-    res.json({ message: 'Password reset token generated (check server logs/email).', dev_token: resetToken }); // Return token only in dev
+  res.json({
+    message: 'If an account with that email exists, a password reset link has been sent.'
+  }); 
 
   } catch (err) {
     console.error('Forgot Password Error:', err);
@@ -83,7 +111,8 @@ const forgotPassword = async (req, res) => {
 // Function to handle resetting password with token
 const resetPassword = async (req, res) => {
   try {
-    const { token, newPassword } = req.body;
+    const { token } = req.params;
+    const { password: newPassword } = req.body;
     if (!token || !newPassword) return res.status(400).json({ error: 'Token and new password required' });
 
     // Find user by the reset token and check expiry

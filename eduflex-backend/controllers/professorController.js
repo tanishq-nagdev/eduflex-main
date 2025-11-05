@@ -84,7 +84,7 @@ const gradeSubmissionHandler=async (req, res) => {
 }
 
 
-module.exports = { createCourseHandler, 
+module.exports = {  
                    createAssignmentHandler, 
                    getMyCoursesHandler, 
                    getMyAssignmentsHandler, 
